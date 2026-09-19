@@ -1,0 +1,209 @@
+/* Clarette 1.0 workspace: retain the existing dark/lilac identity. */
+.layout{display:flex!important;gap:10px!important;height:calc(100vh - 104px)!important;padding:10px!important;overflow:auto;grid-template-rows:none!important}
+.layout.vertical{flex-direction:column}.layout>.panel{grid-area:auto!important;min-width:190px;min-height:180px;margin:0!important}.layout>.editor{flex:1;min-width:330px}.layout>.inspector{overflow:auto}.layout>.batch{overflow:hidden}
+.layout>.delivery,.panelSeparator{display:none!important}.workspaceDivider{flex:0 0 5px;cursor:col-resize;border-radius:4px;background:#8e83a14a;min-width:5px}.vertical>.workspaceDivider{cursor:row-resize;min-height:5px}.workspaceDivider:hover{background:#b29af4}
+.panelDrag{font-size:10px;letter-spacing:.07em;color:#bdb1ce;cursor:grab;user-select:none;padding:4px 8px;flex-shrink:0}.panelDrag:before{content:'⠿ ';color:#b59aed}.layoutLocked .panelDrag{cursor:default}
+.batchbar{min-width:0}.batchbar b{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:100%}.topbar nav{gap:14px}.topbar nav button{min-width:56px}.topbar nav button svg{width:25px;height:25px}.topbar nav button span{font-size:12px}
+.outputPresetActions{display:flex;gap:5px;margin-top:8px}.outputPresetActions button{flex:1;font-size:11px}.qualityHelp{font-size:11px}.previewToggle{width:32px;min-width:32px;padding:5px}.previewToggle svg{width:20px;height:20px}
+#polygonActions{display:flex;gap:7px;align-items:center;padding:7px;font-size:11px}#polygonActions[hidden]{display:none}#polygonActions button{padding:5px 10px}#polygonActions span{flex:1}
+#settingsDialog{display:none!important}.outputSection .passportNote{font-size:11px;color:#c3b7d7;line-height:1.5}.maskToolOptions{flex-wrap:wrap}.brushbar{flex-wrap:wrap;gap:8px}.toolRail button{flex-shrink:0}
+
+.layout>.panel[hidden]{display:none!important}.vertical>.editor{flex-shrink:0!important;min-height:480px}.vertical>.batch{min-height:220px}.vertical>.inspector{min-height:320px}
+
+/* Compact, centered actions alongside the output preset. */
+.outputPresetActions{display:flex;align-items:center;gap:6px;margin:0 0 8px}
+.outputPresetActions #presetSelect{flex:1;min-width:0;width:0;margin:0}
+.outputPresetActions .compactIcon,.previewToggle{display:inline-flex!important;align-items:center;justify-content:center;flex:0 0 30px;width:30px;min-width:30px;height:30px;padding:0!important;line-height:0}
+.outputPresetActions .compactIcon svg,.previewToggle svg{display:block;flex:none;width:18px;height:18px;margin:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+button:has(>svg):not(:has(>span)){align-items:center;justify-content:center}
+button>svg{vertical-align:middle}
+/* Use matching native popup foreground/background instead of pale text on white. */
+:root{color-scheme:dark}
+select{color-scheme:dark}select option,select optgroup{color:#f3eff9;background:#24262e}select option:disabled{color:#aaa4b5}
+
+.previewToggle svg{fill:currentColor!important;stroke:none!important}
+/* Desktop actions: compact hit targets, centered glyphs, no duplicate rows. */
+.compactIcon{display:inline-flex!important;align-items:center;justify-content:center;width:30px!important;min-width:30px!important;max-width:30px;min-height:30px!important;height:30px!important;flex:0 0 30px!important;padding:0!important;line-height:0}
+.compactIcon>svg{display:block;width:18px!important;height:18px!important;flex:none;margin:0!important}
+.filledIcon>svg{fill:currentColor!important;stroke:none!important}
+.compactMaskActions{display:flex!important;align-items:center;gap:6px}
+.compactMaskActions #detectMask,.compactMaskActions #applyMask{flex:1;min-width:0;height:30px;min-height:30px;padding:4px 7px;font-size:11px;white-space:nowrap}
+.compactMaskActions #edgeQuick{margin:0!important}
+.framingSection .two button{min-height:30px!important;height:30px;padding:4px 8px;font-size:11px}
+.framingSection .two svg{width:18px;height:18px}
+.detailSection>.uploadZone{min-height:34px!important;height:34px;padding:5px 9px;gap:8px}
+.detailSection>.uploadZone svg{width:20px;height:20px;flex:none}
+.detailSection>.uploadZone span{font-size:11px;font-weight:500}
+.enhanceRow{gap:6px;align-items:center}
+.enhanceRow #enhance{height:30px;min-height:30px;padding:4px 10px;font-size:12px}
+.enhanceRow #working{width:30px;min-width:30px;height:30px;min-height:30px;padding:0;flex:0 0 30px}
+.enhanceRow #working svg{width:18px;height:18px;display:block;margin:0}
+.colorActions #applyColor{height:30px;min-height:30px;padding:4px 10px;font-size:12px}
+.canvasTools{width:38px!important;padding:1px;gap:2px}
+.canvasTools #brushTools{width:36px!important;gap:2px}
+.canvasTools>button,.canvasTools #brushTools>button,#brushTools #lockPosition{width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important;flex:0 0 36px!important;padding:6px!important}
+.canvasTools>button>svg,.canvasTools #brushTools>button>svg,#lockPosition svg{width:22px!important;height:22px!important;flex:0 0 22px;margin:0!important}
+.historyTools{gap:5px;padding-top:0;padding-bottom:5px}
+.historyTools #redo svg{transform:scaleX(-1)}
+.portraitActions{display:flex!important;align-items:center;gap:6px}
+.portraitActions #applyCutouts{flex:1;min-width:0;width:auto;height:32px;min-height:32px;margin:0;padding:4px 7px;font-size:11px}
+.portraitActions #applyCutouts svg{width:18px;height:18px}
+.topbar nav{gap:8px}.topbar nav button{width:48px;min-width:48px;padding:3px;gap:4px}.topbar nav button svg{width:22px;height:22px}.topbar nav button span{font-size:10px}
+/* Compact, consistent Preview toolbar with groups that wrap together. */
+.compactPreviewBar{display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:7px!important;padding:8px 10px!important;font-size:11px}
+.compactPreviewBar .previewRange{display:inline-flex!important;align-items:center;gap:5px;flex:0 0 auto!important;min-width:0!important;margin:0;white-space:nowrap}
+.compactPreviewBar .previewRange input[type=range]{appearance:none;-webkit-appearance:none;width:58px;min-width:58px;max-width:58px;height:18px;padding:0;border:0;background:transparent}
+.compactPreviewBar .previewRange input[type=range]::-webkit-slider-runnable-track{height:4px;background:#6d667e;border:0;border-radius:4px}
+.compactPreviewBar .previewRange input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#d1c0f8;margin-top:-4px;box-shadow:none}
+.compactPreviewBar .previewRange output{font-size:11px;min-width:30px;margin:0}
+.compactPreviewBar .rangeStep,.compactPreviewBar #brushMinus,.compactPreviewBar #brushPlus{display:inline-flex;align-items:center;justify-content:center;width:22px;min-width:22px;height:22px;min-height:22px;padding:0;line-height:0}
+.compactPreviewBar .rangeStep svg,.compactPreviewBar #brushMinus svg,.compactPreviewBar #brushPlus svg{display:block;width:13px;height:13px;margin:0;fill:currentColor;stroke:none}
+.lassoModes,.previewFeather{display:inline-flex;align-items:center;gap:4px;margin:0;white-space:nowrap}
+.lassoModes{border-left:1px solid #45404f;padding-left:7px}
+.compactPreviewBar .lassoModes .compactIcon{width:25px!important;min-width:25px!important;max-width:25px;height:25px!important;min-height:25px!important;flex-basis:25px!important}
+.previewFeather input{width:43px;min-width:43px;height:25px;min-height:25px;padding:3px 4px;font-size:11px}
+.compactPreviewBar #homeView,.compactPreviewBar #viewControls,.compactPreviewBar #editGuide,.compactPreviewBar #guideToggleButton{display:inline-flex!important;align-items:center;justify-content:center;width:27px!important;min-width:27px!important;max-width:27px;height:27px!important;min-height:27px!important;padding:0!important;flex:0 0 27px!important}
+.compactPreviewBar #homeView svg,.compactPreviewBar #viewControls svg,.compactPreviewBar #editGuide svg,.compactPreviewBar #guideToggleButton svg{display:block;width:18px!important;height:18px!important;margin:0!important}
+.compactPreviewBar #homeView{margin-left:4px}.compactPreviewBar #viewZoom{font-size:11px;width:81px;min-width:72px;min-height:27px;padding:3px}
+.compactPreviewBar #inspectionZoom{width:54px;min-width:40px;max-width:54px;margin:0}
+.guideIcon svg{fill:none!important;stroke:currentColor!important;stroke-width:1.5;stroke-linecap:round}
+.compactPreviewBar .guideToggle[hidden],.maskToolOptions[hidden]{display:none!important}
+.compactPreviewBar button.active{background:#574771;border-color:#b69af5;color:#f5eeff}
+
+#previewBackground svg{fill:#00a84f;stroke:none!important}
+.previewHeaderActions{display:flex;align-items:center;gap:4px;margin-left:auto;flex:none}
+.editorHead .previewHeaderActions #before.comparisonIcon,.editorHead .previewHeaderActions #cutoutToggle.comparisonIcon,.editorHead .previewHeaderActions #previewBackground{display:inline-flex!important;align-items:center;justify-content:center;width:28px!important;min-width:28px!important;max-width:28px!important;height:28px!important;min-height:28px!important;flex:0 0 28px!important;padding:0!important;margin:0!important;border:1px solid #45404f!important;border-radius:7px;background:#272930;box-sizing:border-box}
+.editorHead .previewHeaderActions #before svg,.editorHead .previewHeaderActions #cutoutToggle svg,.editorHead .previewHeaderActions #previewBackground svg{display:block;width:18px!important;height:18px!important;margin:0!important;padding:0!important}
+.editorHead .previewHeaderActions button:hover{border-color:#b69af5!important}
+.editorHead .previewHeaderActions .active,.editorHead .previewHeaderActions [aria-pressed=true]{border-color:#b69af5!important;background:#574771!important}
+
+.portraitRow{position:relative}.portraitRow>.queueItem{width:100%;text-align:left}.portraitRow .qText{padding-right:25px;min-width:0}
+.portraitTrash{position:absolute;right:7px;bottom:9px;display:flex;align-items:center;justify-content:center;width:25px;min-width:25px;height:25px;min-height:25px;padding:0;border:1px solid #45404f;border-radius:6px;background:#272930;color:#bfb6cf}
+.portraitTrash svg{width:15px;height:15px;display:block;fill:none!important;stroke:currentColor!important;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.portraitTrash:hover{color:#ffa7b1;border-color:#d58a95}.batchbar #restorePortrait{margin-left:auto}.batchbar #restorePortrait[hidden]{display:none!important}
+#colorPopover{position:fixed;z-index:1000;width:290px;max-width:calc(100vw - 16px);padding:12px;background:#24262e;border:1px solid #716187;border-radius:10px;box-shadow:0 8px 28px #0008;color:#f3eff9}#colorPopover[hidden]{display:none}.colorPopoverHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-weight:600}.colorPopoverHead button{display:grid;place-items:center;width:26px;height:26px;padding:0;font-size:20px}#colorPopover .sliderRow{margin:10px 0}#colorPopover #resetColor{margin-top:6px;height:28px;padding:3px 10px}#autoColor svg{fill:none;stroke:currentColor;stroke-width:1.7;width:18px;height:18px}
+#colorPopover input[type=range]{appearance:none;height:4px;background:#736b83;border:0;border-radius:4px;padding:0}#colorPopover input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;border-radius:50%;background:#cfb9f5}#colorPopover .sliderRow{display:grid;grid-template-columns:45px minmax(0,1fr) 38px;gap:10px;align-items:center}
+/* Color cues match each adjustment's direction. */
+#colorPopover #hue{background:linear-gradient(to right,#00d9df 0%,#4378fa 16.67%,#dc50ed 33.33%,#f25b64 50%,#edcf4f 66.67%,#62d774 83.33%,#00d9df 100%)}
+#colorPopover #tint{background:linear-gradient(to right,#54d680 0%,#afb4ae 50%,#dc62d8 100%)}
+#colorPopover input[type=range]{height:7px;border-radius:999px;box-shadow:inset 0 0 0 1px #ffffff18}
+#colorPopover input[type=range]::-webkit-slider-thumb{width:14px;height:14px;background:#f5f0fc;border:2px solid #302a3b;box-shadow:0 0 0 1px #e4d8f7}
+#colorPopover input[type=range]:focus-visible{outline:2px solid #b69af5;outline-offset:4px}
+#colorPopover input[type=range]::-webkit-slider-runnable-track{height:7px;border-radius:999px;background:transparent!important}
+#colorPopover input[type=range]::-webkit-slider-thumb{background:#f5f0fc!important;border:2px solid #302a3b!important;margin-top:-3.5px}
+/* Toolbar labels and glyphs share a bounded, centered button. */
+.topbar nav{gap:6px;align-items:center}.topbar nav button,.topbar nav .iconButton{box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:0 0 auto;width:64px;min-width:64px;height:56px;min-height:56px;padding:5px 3px;gap:4px;border:1px solid #45404f;border-radius:8px;background:#24262e;overflow:hidden;line-height:12px}.topbar nav button span{display:block;max-width:100%;font-size:10px;line-height:12px;white-space:nowrap}.topbar nav button svg,.topbar nav button .providerIcon,.topbar nav button .providerIcon.photoshop{width:22px;height:22px;flex:0 0 22px;object-fit:contain}.topbar nav button:hover{border-color:#b69af5;background:#34303f}
+
+/* Preserve readable controls at divider limits and after restoring a workspace. */
+.layout:not(.vertical)>.batch{min-width:220px;flex-shrink:1!important}
+.layout:not(.vertical)>.editor{min-width:400px}
+.layout:not(.vertical)>.inspector{min-width:330px;flex-shrink:1!important}
+.layout.vertical>.panel{min-width:330px}
+.batchbar{min-width:0}.batchbar strong,#batchCount{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inspector select{min-width:0;max-width:100%}.inspector .qualityChoice{min-width:0}
+.editorHead{min-width:0;flex-wrap:wrap}.previewHeaderActions{flex-shrink:0}
+.workspaceDivider{touch-action:none;flex-shrink:0}
+
+.layout:not(.vertical)>.batch{max-width:400px}.layout:not(.vertical)>.inspector{max-width:520px}
+/* Compact workspace and movable tools. */
+.layout{gap:3px!important;padding:6px!important}
+.workspaceDivider{min-width:3px!important;flex-basis:3px!important;border-radius:2px;background:#8e83a133}.vertical>.workspaceDivider{min-height:3px}
+.layout:not(.vertical)>.batch{min-width:250px}.layout>.editor{position:relative;padding:6px!important}.editorHead{padding:3px 5px!important;margin:0!important}.previews{gap:5px!important;padding:3px!important}.previewPane{padding:0!important}.inspector{padding:6px 10px!important}.inspector>section{padding:9px 0!important}.batchbar{padding:8px!important}.queue{padding:4px 7px!important}.batchFoot{padding:7px!important;gap:5px!important}.panelDrag{padding:3px 7px}
+.portraitRow .qText{padding-right:30px!important}.queueItem{gap:9px!important;padding:8px!important}.queueItem img{width:62px!important;height:72px!important;object-fit:cover}.queueItem em{white-space:nowrap;font-size:12px!important}.portraitTrash{right:7px;bottom:9px;width:24px;min-width:24px;height:24px;min-height:24px}
+.canvasTools{width:34px!important;min-width:34px!important;padding:2px!important;gap:3px!important;align-self:stretch;display:flex;flex-direction:column}.canvasTools #brushTools{gap:3px!important}.canvasTools button{width:29px!important;min-width:29px!important;height:30px!important;min-height:30px!important;padding:4px!important;display:flex;align-items:center;justify-content:center}.canvasTools svg{width:20px!important;height:20px!important}.railHistory{margin-top:auto;padding-top:7px;display:flex;flex-direction:column;gap:3px;border-top:1px solid #ffffff19}.editor .canvasTools #undo,.editor .canvasTools #redo{display:flex!important;margin:0!important}.editor .viewbar:empty{display:none}
+#toast{position:absolute!important;top:48px!important;bottom:auto!important;left:50%!important;transform:translateX(-50%)!important;width:max-content;max-width:calc(100% - 36px);padding:9px 14px;background:rgba(44,38,56,.82)!important;border:1px solid #b69af588;border-radius:9px;backdrop-filter:blur(10px);z-index:1500;pointer-events:none;text-align:center}
+button:focus:not(:focus-visible){outline:none!important;box-shadow:none!important}.maskSection button:focus:not(:focus-visible){border-color:#45404f!important}
+.maskSection .sectionTitle{display:flex;align-items:center;justify-content:space-between}.maskSection #maskEnabled{width:15px;height:15px;margin:0;accent-color:#b69af5}.maskSection.maskDisabled>:not(.sectionTitle){opacity:.4}.maskSection.maskDisabled button:disabled{opacity:1}
+#viewPanel{width:340px!important;padding:14px!important}#viewPanel .fieldGrid{gap:8px}#viewPanel input{min-width:0;width:100%;height:29px;min-height:29px;padding:4px 7px}#viewPanel hr{margin:12px 0}#viewPanel h3{margin:0 0 9px;font-size:12px}#viewPanel #fitInspection{margin-top:10px}#viewPanel #placementNote{display:none!important}
+#edgesDialog{width:340px!important;padding:14px!important}#edgesDialog p{display:none!important}#edgesDialog>label:not(.check){display:flex;justify-content:space-between;align-items:center;gap:12px}#edgesDialog #edgeRadius{width:70px;min-height:29px;padding:4px 6px}#edgesDialog .check{margin:12px 0}#edgesDialog h2{font-size:17px}
+#headDialog{width:max-content!important;max-width:calc(100vw - 30px);padding:14px!important}#headDialog #headCanvas{display:block;max-width:520px!important;max-height:390px!important;margin:10px auto!important}#headDialog .dialogFoot{margin-top:10px;padding:0;justify-content:flex-end}#headDialog h2{font-size:17px}.dialogHead{cursor:move;touch-action:none;margin-bottom:10px!important}dialog{resize:none!important}dialog .dialogHead button{width:28px;min-width:28px;height:28px;min-height:28px;padding:0}
+.inspector .hint,.inspector .qualityHelp,.inspector .passportNote,#imageHint,#fitStatus{display:none!important}
+.canvasTools #rotateTool svg,.canvasTools #rotateTool svg path{fill:none!important;stroke:currentColor!important;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.canvasTools #redo svg{transform:scaleX(-1)}.historyTools:empty{display:none!important}#processingGlow{display:none!important}
+.editor #jobbar{position:absolute;top:48px;bottom:auto;left:50%;transform:translateX(-50%);width:min(440px,calc(100% - 36px));background:#2c2638d1;border:1px solid #b69af588;backdrop-filter:blur(10px);border-radius:9px;z-index:1500;padding:10px 12px}
+
+/* Keep selected borders and keyboard focus entirely inside the compact rail. */
+.editor .canvasTools{width:38px!important;min-width:38px!important;padding:4px!important}
+.editor .canvasTools #brushTools{width:30px!important;flex-shrink:0}
+.editor .canvasTools button,.editor .canvasTools #brushTools>button,.editor #brushTools #lockPosition{width:30px!important;min-width:30px!important;height:30px!important;min-height:30px!important;flex:0 0 30px!important;padding:4px!important}
+.editor .canvasTools button:focus-visible{outline-offset:1px}
+#notificationStack{position:absolute;top:48px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 32px);z-index:80;background:#2c2638d9;backdrop-filter:blur(12px);border:1px solid #ad93d080;border-radius:11px;box-shadow:0 5px 18px #0003;overflow:hidden;pointer-events:auto}
+.editor #notificationStack #jobbar,.editor #notificationStack #toast{position:static!important;transform:none!important;max-width:100%!important;width:auto!important;min-width:0!important;border:0!important;box-shadow:none!important;background:none!important;backdrop-filter:none!important;margin:0!important;border-radius:0!important}
+.editor #notificationStack #toast{padding:0!important}.notice{padding:10px 14px}.notice+.notice{border-top:1px solid #ffffff18}.notice.error{color:#ffb6c5}
+
+.topbar .appIcon{width:28px;height:28px;object-fit:contain;display:block}
+
+/* UI polish pass: consistent icon-button hover state, and a fix for the
+   Refine Edges dialog where the checkbox and the primary button sat on the
+   same line because .check is inline-flex and <button> is inline-block by
+   default, so nothing forced a line break between them. */
+.compactIcon:hover,.previewToggle:hover{background:#33364a}
+#edgesDialog[open]{display:flex;flex-direction:column;gap:10px}
+#edgesDialog #runEdges{align-self:flex-end;margin:0}
+
+/* Apply Cutout has class="primary" in the markup (same as Enhance Portrait),
+   but an older rule in clarette.css (.maskSection #applyMask) targets it by
+   ID and silently repaints it gray, so it never looked like the section's
+   primary action. Restore the same purple used by every other primary
+   button so Mask has one clear finishing action, matching Detail's. */
+.maskSection #applyMask{background:#ae91f2;border-color:#b59cf4;color:#181423}
+.maskSection #applyMask:hover{background:#c1aafa}
+
+/* Portraits panel header: "Portraits" stays the bold title, the live count
+   and batch name read as secondary metadata instead of matching it. */
+.batchMeta{font-weight:400;color:var(--muted);font-size:.8em}
+
+/* Notifications: an honest indeterminate progress bar (there's no real
+   percentage to report) plus a soft entrance so the stack doesn't just
+   snap into view, and the same treatment for each toast line. */
+@keyframes noticeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes jobbarSweep{from{background-position:0 0}to{background-position:40px 0}}
+#notificationStack:not([hidden]){animation:noticeIn .18s ease-out}
+.notice{animation:noticeIn .16s ease-out}
+#jobbar{position:relative;overflow:hidden}
+#jobbar:after{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;background:repeating-linear-gradient(90deg,#b69af5 0 20px,#b69af566 20px 40px);animation:jobbarSweep .8s linear infinite}
+
+/* Portrait Mode's nested layout: Preview spans the full height on one side,
+   Portraits and Adjustments stack on the other, and the delivery bar keeps
+   running the full width along the bottom like every other workspace. The
+   right column's width is draggable via .nestedDivider (see v1.js); its
+   px width is written to --nestedCol on .layout. */
+.layout.nested{display:grid!important;grid-template-columns:1fr var(--nestedCol,340px);grid-template-rows:260px 1fr auto;gap:10px!important}
+.layout.nested>.editor{grid-row:1/3!important;grid-column:1!important;flex:none!important}
+.layout.nested>.batch{grid-row:1!important;grid-column:2!important;flex:none!important;min-height:0;overflow:hidden}
+.layout.nested>.inspector{grid-row:2!important;grid-column:2!important;flex:none!important;min-height:0;overflow:auto}
+.layout.nested>.delivery{grid-row:3!important;grid-column:1/-1!important}
+.layout.nested .workspaceDivider{display:none!important}
+.nestedDivider{display:none;grid-row:1/3;grid-column:1;justify-self:end;width:10px;margin-right:-15px;cursor:col-resize;position:relative;z-index:5}
+.nestedDivider:after{content:'';position:absolute;left:4px;top:0;bottom:0;width:2px;background:transparent}
+.nestedDivider:hover:after,.nestedDivider.dragging:after{background:#ae91f2}
+.layout.nested>.nestedDivider{display:block}
+
+/* Filmstrip: the Portraits panel reflows into a horizontal scrolling strip of
+   compact cards once it's been expanded past a width threshold (see the
+   ResizeObserver in v1.js, which toggles this class -- it is not simply tied
+   to Portrait Mode being active). */
+.batch.filmstrip{display:flex;flex-direction:column}
+.batch.filmstrip .queue{display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;gap:8px;flex:1}
+.batch.filmstrip .portraitRow{flex:0 0 auto;display:flex;flex-direction:column}
+.batch.filmstrip .queueItem{flex-direction:column;align-items:center;width:84px;min-height:0;gap:6px;text-align:center;border-color:#3b4956;border-radius:8px}
+.batch.filmstrip .queueItem img{width:64px;height:64px;object-fit:cover;border:1px solid #4a5a68;border-radius:6px}
+.batch.filmstrip .qText{flex:none;width:100%;align-self:auto}
+.batch.filmstrip .queueItem strong{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.batch.filmstrip .originalDimensions,.batch.filmstrip .qText>span{display:none}
+.batch.filmstrip .portraitTrash{right:2px;bottom:2px;width:16px;min-width:16px;height:16px;min-height:16px}
+
+/* The Portraits panel footer buttons (Apply all cutouts, New batch) were
+   stretching to the panel's full width via clarette.css's #applyCutouts{
+   width:100%} plus .batchFoot's align-items:stretch. They shouldn't grow just
+   because the panel is wide. */
+.batchFoot button{flex:none!important;width:auto!important;max-width:200px}
+
+/* Adjustments panel reflowing into outlined columns once it's wide enough
+   (toggled by the same ResizeObserver as the filmstrip breakpoint). Each
+   direct section becomes its own outlined column: Position ("Output Size &
+   Framing"), Color, Enhance ("Detail"). A fourth Mask column isn't here yet --
+   mask controls currently live in the Preview panel's cutout toolbar, not
+   this panel; moving them in is a separate decision, not made yet. */
+.inspector.wide{display:grid!important;grid-template-columns:repeat(3,minmax(180px,1fr));gap:12px;align-content:start}
+.inspector.wide>.inspectorTabs{grid-column:1/-1}
+.inspector.wide>section{border:1px solid #354552;border-radius:10px;padding:13px!important;margin:0}

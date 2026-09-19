@@ -1,0 +1,19 @@
+# Build output (regenerate with packaging/build-mac.sh)
+dist/
+build/
+.build-runtime/
+__pycache__/
+*.pyc
+
+# Downloaded engine installer payloads
+engine-packages/
+
+# Bundled model weights -- too large for a normal git repo (300MB+ each).
+# Licenses stay tracked; the .onnx files themselves need Git LFS or a
+# separate download step if they should be versioned later.
+models/*.onnx
+
+# Claude Code local session settings (machine-specific, not app config)
+.claude/
+
+.DS_Store

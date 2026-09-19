@@ -1,0 +1,41 @@
+GFPGANv1.4.onnx bundled with Clarette
+=======================================
+
+Source: TencentARC/GFPGAN, release v1.3.0
+https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth
+Architecture: GFPGANv1Clean (U-Net encoder + StyleGAN2 decoder with spatial
+feature transform), out_size=512, num_style_feat=512, channel_multiplier=2,
+num_mlp=8, input_is_latent=True, different_w=True, narrow=1, sft_half=True
+https://github.com/TencentARC/GFPGAN/blob/master/gfpgan/archs/gfpganv1_clean_arch.py
+https://github.com/TencentARC/GFPGAN/blob/master/gfpgan/archs/stylegan2_clean_arch.py
+
+This file is an ONNX export of the official checkpoint above (same weights,
+same architecture, verified against the original PyTorch model: max output
+difference 3.3e-5, and confirmed 0 missing / 0 unexpected keys when loading
+the checkpoint into this port of the architecture). One deliberate change:
+the export always uses the checkpoint's own trained per-layer noise buffers
+(randomize_noise=False) rather than the official code's default of fresh
+random noise on every call, so the same photo always produces the same
+restoration result. No retraining or modification of the weights.
+
+Original checkpoint SHA-256: e2cd4703ab14f4d01fd1383a8a8b266f9a5833dacee8e6a79d3bf21a1b6be5ad
+
+GFPGAN is released under the Apache License, Version 2.0. Full text:
+http://www.apache.org/licenses/LICENSE-2.0
+
+Copyright (C) 2021 THL A29 Limited, a Tencent company. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Note: the training data (FFHQ) has its own separate terms; this note covers
+TencentARC's own release of the trained weights, not the training dataset.

@@ -1,0 +1,10 @@
+Pillow>=10.4,<13
+numpy>=1.26,<3
+opencv-contrib-python-headless>=4.10,<5
+rembg[cpu]>=2.0.67,<3
+requests>=2.32,<3
+pywebview>=5.4,<7; sys_platform == 'darwin'
+pyobjc-core>=10.3; sys_platform == 'darwin'
+pyobjc-framework-Cocoa>=10.3; sys_platform == 'darwin'
+pyobjc-framework-WebKit>=10.3; sys_platform == 'darwin'
+pyobjc-framework-UserNotifications>=10.3; sys_platform == 'darwin'
