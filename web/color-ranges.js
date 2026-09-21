@@ -65,15 +65,24 @@ const eyedropper = document.createElement('button');
 eyedropper.type = 'button';
 eyedropper.id = 'colorEyedropper';
 eyedropper.className = 'eyedropperButton';
-eyedropper.title = 'Pick a color from Preview to select its range (⌘-click to add another marker)';
+eyedropper.title = 'Pick a color from Preview to select its range';
 eyedropper.setAttribute('aria-label', 'Eyedropper: pick a color range from Preview');
 eyedropper.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.5 2.5a3 3 0 0 1 0 4.24L17 8.24l-4.24-4.24 1.5-1.5a3 3 0 0 1 4.24 0zM11.76 5l4.24 4.24-9.5 9.5-4.5 1 1-4.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 const header = document.createElement('div');
 header.className = 'selectiveColorHeader';
-header.append(swatches, eyedropper);
+// Eyedropper and resetColor are a single tool group -- appended together
+// into their own wrapper so justify-content:space-between on the header
+// (swatches vs. this group) can't also insert a gap *between the two of
+// them*: with 3 direct flex children, space-between spaces every adjacent
+// pair equally, which used to shove these two icons apart from each other
+// by the same amount as the whole swatch row was shoved from them.
+const rangeTools = document.createElement('div');
+rangeTools.className = 'rangeTools';
+rangeTools.append(eyedropper);
+header.append(swatches, rangeTools);
 // resetColor (Hue/Saturation Reset) is created and wired up further down,
-// then moved here next to the Eyedropper -- see below.
+// then moved into rangeTools next to the Eyedropper -- see below.
 
 hueRow.classList.add('hueSpectrumRow');
 // A wrapper around just the input, not a bare extra grid child: .sliderRow's
@@ -150,17 +159,24 @@ resetColor.onclick = () => {
   updatePreview();
   schedule();
 };
-header.append(resetColor);
+rangeTools.append(resetColor);
 
 // Exposure and Grain: new global (Master-only, like White balance) adjustments,
 // alongside the existing White balance/Shadows/Highlights group layout.js
 // already built (Tint no longer lives there -- see above).
 const balanceControls = document.querySelector('.balanceControls');
+// app.js's own oninput loop (for hue/saturation/shadows/highlights/
+// temperature/tint) was written before these two existed, so it never
+// wired them -- draft.exposure/draft.grain updated on Auto Color, and
+// syncColor() displayed whatever value was already there, but dragging
+// either slider by hand did nothing at all: no draft write, no output-
+// number update, no live preview, no schedule. Bound the same way here.
 for (const [id, label, max] of [['exposure', 'Exposure', 100], ['grain', 'Grain', 100]]) {
   const row = document.createElement('div');
   row.className = 'sliderRow';
   row.innerHTML = `<label for="${id}">${label}</label><input id="${id}" type="range" min="${id === 'grain' ? 0 : -max}" max="${max}" value="0"><output id="${id}Out">0</output>`;
   balanceControls.append(row);
+  $(id).oninput = () => { if (!current) return; draft[id] = Number($(id).value); syncColor(); queueLiveColor(); schedule(); };
 }
 
 function rangeValues() {
@@ -177,18 +193,40 @@ function syncColorRanges() {
     $(key + 'Out').textContent = values[key] || 0;
   }
   for (const b of swatches.children) b.classList.toggle('active', b.dataset.range === selectedRange);
-  // The Hue spectrum's own thumb always shows Master's rotation (there's only
-  // one physical slider); a selected named range gets a bracket marking
-  // where its own hue center sits on that spectrum instead of moving the
-  // thumb, since its Hue field edits a *delta*, not an absolute position.
-  brackets.replaceChildren();
-  if (selectedRange !== 'master') {
-    const mark = document.createElement('div');
-    mark.className = 'hueBracket';
-    mark.style.left = (RANGE_HUE_CENTER[selectedRange] / 360 * 100) + '%';
-    brackets.append(mark);
-  }
+  drawRange();
 }
+
+// Bounds are unwrapped degrees relative to center, so a red range can
+// cross 360 without changing marker order or losing its feathered edges.
+function rangeGeometry(){const v=rangeValues();return {center:v.center??RANGE_HUE_CENTER[selectedRange], bounds:v.bounds||[-60,0,0,60]};}
+function drawRange(){
+ brackets.replaceChildren();if(selectedRange==='master')return;
+ const {center,bounds}=rangeGeometry();
+ function segment(a,b,falloff){
+   for(let turn=-2;turn<=2;turn++){
+     const start=Math.max(0,center+a+turn*360),end=Math.min(360,center+b+turn*360);if(end<=start)continue;
+     const el=document.createElement('span');el.className='hueRangeSegment'+(falloff?' falloff':'');el.style.left=start/3.6+'%';el.style.width=(end-start)/3.6+'%';brackets.append(el);
+   }
+ }
+ segment(bounds[0],bounds[1],true);segment(bounds[1],bounds[2],false);segment(bounds[2],bounds[3],true);
+ bounds.forEach((offset,i)=>{
+   const el=document.createElement('button');el.type='button';el.className='hueRangeMarker'+(i===0||i===3?' outer':'');el.dataset.marker=i;
+   el.title=['Falloff Start','Full Effect Start','Full Effect End','Falloff End'][i];el.setAttribute('aria-label',el.title);el.style.left=((center+offset+360)%360)/3.6+'%';brackets.append(el);
+ });
+}
+let rangeDrag=null;
+function updateMarker(i,value){
+ const v=rangeValues(),{center,bounds}=rangeGeometry();const next=bounds.slice();
+ next[i]=Math.max(i?next[i-1]:-180,Math.min(i<3?next[i+1]:180,value));
+ v.center=center;v.bounds=next;drawRange();queueLiveColor();schedule();
+}
+brackets.addEventListener('pointerdown',e=>{
+ const marker=e.target.closest('[data-marker]');if(!marker||!current)return;e.preventDefault();e.stopPropagation();
+ const {bounds}=rangeGeometry();rangeDrag={index:+marker.dataset.marker,x:e.clientX,start:bounds[+marker.dataset.marker],width:brackets.clientWidth};brackets.setPointerCapture(e.pointerId);
+});
+brackets.addEventListener('pointermove',e=>{if(rangeDrag)updateMarker(rangeDrag.index,rangeDrag.start+(e.clientX-rangeDrag.x)*360/rangeDrag.width)});
+for(const event of ['pointerup','pointercancel','lostpointercapture'])brackets.addEventListener(event,()=>rangeDrag=null);
+brackets.addEventListener('keydown',e=>{const marker=e.target.closest('[data-marker]');if(!marker||!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();const i=+marker.dataset.marker;updateMarker(i,rangeGeometry().bounds[i]+(e.key==='ArrowRight'?1:-1));brackets.querySelector(`[data-marker="${i}"]`).focus()});
 
 // hue/saturation/lightness already got a plain flat-field oninput from
 // app.js's generic slider loop; a selected named range needs to write into
@@ -214,9 +252,7 @@ syncColor = function () { previousSyncColor(); syncColorRanges(); };
 // nearest of the six named ranges (or Master if the sample is close to
 // gray/neutral, since no single hue owns a desaturated pixel) -- without
 // disarming, so the next click can sample somewhere else right away. Only
-// Escape or clicking the icon again exits. Cmd/Ctrl-click leaves a second
-// reference bracket on the spectrum without changing which range is being
-// edited, for comparing two sampled colors at once.
+// Escape or clicking the icon again exits. Every sample replaces the selected range.
 let sampling = false;
 const canvas = $('mainCanvas');
 const viewport = document.querySelector('.viewport');
@@ -310,21 +346,15 @@ canvas.addEventListener('pointerdown', (e) => {
   const px = samplePixel(e.clientX, e.clientY);
   if (!px) return;
   const picked = nearestRange(px.r / 255, px.g / 255, px.b / 255);
-  if (e.metaKey || e.ctrlKey) {
-    if (picked) {
-      const mark = document.createElement('div');
-      mark.className = 'hueBracket hueBracketReference';
-      mark.style.left = (RANGE_HUE_CENTER[picked] / 360 * 100) + '%';
-      brackets.append(mark);
-    }
-    return;
-  }
-  // Hue/Saturation/Lightness for the newly-selected range stay exactly as
-  // they were (0 for a range never touched before, or whatever was set
-  // last time) -- sampling only *chooses* which range those controls now
-  // edit, it never writes into draft itself, so Hue/Saturation are still
-  // fully editable immediately after, live, without reactivating anything.
   selectedRange = picked || 'master';
+  if(picked){
+    const values=rangeValues();
+    const max=Math.max(px.r,px.g,px.b), min=Math.min(px.r,px.g,px.b), d=max-min;
+    let h=max===px.r?(px.g-px.b)/d:max===px.g?(px.b-px.r)/d+2:(px.r-px.g)/d+4;
+    values.center=((h*60)%360+360)%360;
+    values.bounds=[-45,-15,15,45];
+    queueLiveColor();schedule();
+  }
   syncColorRanges();
   const vpRect = viewport.getBoundingClientRect();
   sampleRing.style.left = (e.clientX - vpRect.left) + 'px';

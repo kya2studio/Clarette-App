@@ -30,7 +30,23 @@ for(const dialog of document.querySelectorAll('dialog')){
  const stack=document.createElement('div');stack.id='notificationStack';stack.setAttribute('aria-live','polite');
  document.querySelector('.topbar').append(stack);stack.append($('jobbar'),$('toast'));
  let notes=[];
- function paint(){const toast=$('toast');toast.replaceChildren();for(const note of notes){const row=document.createElement('div');row.className=note.error?'notice error':'notice';row.textContent=note.text;toast.append(row)}toast.hidden=!notes.length||busy;stack.hidden=$('jobbar').hidden&&toast.hidden}
+ // renderJobs() runs on every 1.5s poll tick regardless of whether
+ // anything changed, and this wrapper's own paint() call after message()'s
+ // own (message() -> paint() already happens synchronously) means a single
+ // notification could get torn down and rebuilt 2-3 times over its
+ // lifetime for no visible reason. A signature guard (same pattern as
+ // renderBatch.signature elsewhere) skips the replaceChildren() unless
+ // `notes` or busy/jobbar-visibility actually changed since the last paint.
+ function paint(){
+  const toast=$('toast'),jobbarHidden=$('jobbar').hidden;
+  const signature=JSON.stringify([notes,busy,jobbarHidden]);
+  if(paint.signature===signature)return;
+  paint.signature=signature;
+  toast.replaceChildren();
+  for(const note of notes){const row=document.createElement('div');row.className=note.error?'notice error':'notice';row.textContent=note.text;toast.append(row)}
+  toast.hidden=!notes.length||busy;
+  stack.hidden=jobbarHidden&&toast.hidden;
+ }
  message=function(text,error=false){const note={text,error};notes=notes.filter(n=>n.text!==text);notes.push(note);notes=notes.slice(-3);paint();setTimeout(()=>{notes=notes.filter(n=>n!==note);paint()},error?7000:2600)};
  const previous=renderJobs;renderJobs=function(){previous();paint()};paint();
 })();

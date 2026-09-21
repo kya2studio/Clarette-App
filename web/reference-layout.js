@@ -19,9 +19,19 @@ const eh=document.querySelector('.editorHead');eh.querySelector('.fileHeading').
 // Session selection and advanced position controls remain accessible from Settings.
 const sessions=document.createElement('section');sessions.innerHTML='<h3>Saved batches</h3>';sessions.append(el('batchSelect'));el('settingsDialog').querySelector('hr').before(sessions);
 const advancedPosition=inspector.querySelector('details');advancedPosition.hidden=true;document.body.append(advancedPosition);
-// Curves channel selector becomes the compact RGB / R / G / B tab row.
-const curveHeader=document.querySelector('.curveHeader');curveHeader.hidden=true;el('curveChannel').hidden=true;
-const curveTabs=document.createElement('div');curveTabs.className='curveTabs';curveTabs.innerHTML='<span>Curves</span><div role="tablist" aria-label="Curve channels">'+[['rgb','RGB'],['red','R'],['green','G'],['blue','B']].map(([value,label])=>`<button data-channel="${value}" role="tab" aria-selected="${value==='rgb'}" class="${value==='rgb'?'active':''}">${label}</button>`).join('')+'</div>';document.querySelector('.colorGrid').before(curveTabs);
+// Curves channel selector is the existing #curveChannel <select>
+// (RGB/Red/Green/Blue, unhidden here instead of the separate RGB/R/G/B
+// button row this used to build) -- one compact control instead of four
+// buttons, and the selected option is its own always-visible label with
+// no extra state to keep in sync. app.js's own $('curveChannel').onchange
+// already redraws on selection; nothing else needs wiring here.
+const curveHeader=document.querySelector('.curveHeader');curveHeader.hidden=true;
+// el('curveChannel') moves the live select out of the document (into the
+// still-detached curveTabs div below) -- has to be captured once and
+// reused, not re-queried by id afterward: getElementById can't find it
+// mid-move, since it's briefly not attached to the document at all.
+const curveChannel=el('curveChannel');curveChannel.hidden=false;
+const curveTabs=document.createElement('div');curveTabs.className='curveTabs';curveTabs.append(Object.assign(document.createElement('span'),{textContent:'Curves'}),curveChannel);document.querySelector('.colorGrid').before(curveTabs);
 // Full-width Apply Color, matching the approved panel.
 el('colorStatus').hidden=true;el('resetColor').hidden=true;document.querySelector('.advancedColor').append(el('resetColor'));el('resetColor').hidden=false;
 // Detail area: upload, scale, strength, enhance action.
@@ -71,3 +81,7 @@ document.querySelector('.queue').addEventListener('wheel',e=>{
  if(Math.abs(e.deltaX)>=Math.abs(e.deltaY))return;
  e.preventDefault();q.scrollLeft+=e.deltaY;
 },{passive:false});
+
+// Hysteresis uses the panel's own size, independent of workspace names.
+const portraitsPanel=document.querySelector('.batch');
+new ResizeObserver(entries=>{const {width:w,height:h}=entries[0].contentRect;if(!w||!h)return;const was=portraitsPanel.dataset.orientation==='horizontal';portraitsPanel.dataset.orientation=(was ? w>=420&&w/h>1.4 : w>=480&&w/h>=1.8)?'horizontal':'vertical'}).observe(portraitsPanel);

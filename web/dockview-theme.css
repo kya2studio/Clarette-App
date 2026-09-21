@@ -270,152 +270,64 @@
 #notificationStack {
   position: absolute;
   top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  /* Horizontal centering via left:0;right:0;margin:auto instead of
+   * left:50%+translateX(-50%): the percentage-translateX version measured
+   * as a no-op in testing (computed transform's X component stayed 0
+   * regardless of the box's actual width, even with the one competing
+   * #notificationStack rule elsewhere removed) -- worth a comment in case
+   * that's a real engine quirk with percentage transforms against a
+   * width:max-content box (v1.css) rather than something specific to this
+   * rule, so it doesn't get "simplified" back the same way later. Only the
+   * vertical half still needs a transform, which measured correctly. */
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  transform: translateY(-50%);
   z-index: 60;
   pointer-events: none;
 }
 #notificationStack #jobbar, #notificationStack #toast { pointer-events: auto; }
 
-/* --- Portraits list: small uniform cards, one horizontally-scrolling row --- */
-/* Every orientation used to get a *different* card layout (a wrapping grid
- * of wide horizontal cards when short-and-wide, a single column of the
- * same wide cards when narrow-and-tall) -- both still let the list grow
- * downward as more portraits were added, and the wide card itself was
- * wider than it needed to be. One design now, regardless of how the panel
- * is docked: small fixed-size cards that only ever add sideways, never
- * wrap to a new row -- .queue is the horizontal scroller (native trackpad/
- * scrollbar drag), with a wheel-delta forward in reference-layout.js
- * remapping a plain vertical mouse wheel to it while the pointer is over
- * the list. */
-
-/* .batch (Portraits) is used directly as its own Dockview panel body -- no
- * extra `.dockPanelBody` wrapper -- since it already manages its own
- * internal header/scroll-region/footer layout (.batchbar / .queue /
- * .batchFoot) and adding an outer scrolling+padded wrapper would break
- * that pinned-header/pinned-footer structure. */
+/* --- Portraits list: responsive vertical list <-> horizontal filmstrip --- */
+/* Orientation is set by one ResizeObserver with hysteresis in reference-layout.js. */
 .batch {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
-}
-.batch .queue {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: flex-start;
-  overflow-x: auto;
-  /* auto, not hidden: normally there's exactly one row (no vertical
-   * scrollbar ever appears) since every card is a fixed 104px tall, but
-   * if the panel is ever dragged shorter than that plus the
-   * batchbar/batchFoot chrome around it, this is what lets the card stay
-   * fully reachable by scrolling instead of just clipping it. */
-  overflow-y: auto;
-  gap: 8px;
-  padding: 3px 8px;
-}
-.batch .portraitRow {
-  flex: 0 0 auto;
-  flex-direction: column;
-  align-items: stretch;
-  width: 106px;
-  /* Short enough to still fit a *short* filmstrip panel (e.g. Landscape
-   * Mode's default Portraits bar, which renders out to a ~96px-tall queue
-   * once the batchbar/batchFoot chrome above and below it -- and the
-   * queue's own padding -- are accounted for) in a single row without any
-   * vertical clipping or scrolling. */
-  height: 90px;
-  gap: 0;
-  overflow: hidden;
-  border: 1px solid transparent;
-  border-radius: 7px;
-}
-.batch .portraitRow > .queueItem {
-  flex-direction: column;
-  align-items: stretch;
-  flex: 1;
-  min-width: 0;
-  /* v1.css's compact-toolbar pass !important's gap/padding here too. */
-  gap: 0 !important;
-  padding: 0 !important;
-  min-height: 0;
-  height: auto;
-}
-.batch .portraitRow > .queueItem img {
-  /* v1.css's compact-toolbar pass hard-codes 62x72 with !important. */
-  width: 100% !important;
-  height: 36px !important;
-  flex: none;
-  border-radius: 6px 6px 0 0;
+  container-type: size;
+  container-name: portraits;
 }
 .batch .queueItem strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
-.batch .portraitRow .qText {
-  /* Same vintage: 30px of right padding reserved for a trash button that
-   * used to float on top of this text absolutely-positioned -- long gone
-   * now that .portraitTrash is its own row below, but still !important'd. */
-  padding: 2px 6px 0 !important;
-  align-self: stretch;
-  /* Name gets its own full-width row; dimensions and status share the row
-   * below it (each ellipsizing on its own if the pair doesn't fit) rather
-   * than each getting a separate line -- the height budget above has no
-   * room for 3 stacked text lines plus the thumbnail and trash row. */
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  column-gap: 5px;
-  line-height: 1.25;
-}
-.batch .portraitRow .qText strong,
-.batch .portraitRow .qText .originalDimensions,
-.batch .portraitRow .qText em {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin: 0;
-}
-.batch .portraitRow .qText strong { flex: 1 0 100%; font-size: 9px; }
-.batch .portraitRow .qText .originalDimensions { flex: 0 1 auto; min-width: 0; font-size: 8px; }
-/* .queueItem em{font-size:12px!important} in v1.css's compact pass. */
-.batch .portraitRow .qText em { flex: 0 0 auto; font-size: 8px !important; }
-/* Trash gets its own bottom strip -- never overlapping the thumbnail
- * above or the name/dimensions/status text, which each already have their
- * own row -- and is what the lilac ".active" selection box (below) needs
- * to actually enclose, not just the thumbnail+text above it. */
-.batch .portraitRow .portraitTrash {
-  /* v1.css's base .portraitTrash is position:absolute (a leftover from
-   * before it became a normal flex-flow sibling) -- align-self has no
-   * effect on an absolutely-positioned box, so this has to explicitly
-   * put it back in flow first. */
-  position: static;
-  align-self: flex-end;
-  margin: 0 3px 1px 0;
-  width: 16px;
-  height: 16px;
-  min-height: 0;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.batch .portraitRow .portraitTrash svg { width: 10px; height: 10px; }
-/* The lilac ".active" selection highlight is a generic, !important-ed rule
- * shared by several unrelated buttons across the app (curve tabs, before/
- * cutoutToggle, ...) -- reused here rather than duplicated, but it paints
- * onto .queueItem itself, which stops short of the trash button below
- * since that's .queueItem's flex *sibling* inside .portraitRow, not
- * something nestable inside it (both are <button>s already). Moving the
- * highlight onto their shared parent .portraitRow -- and suppressing it on
- * .queueItem so it doesn't double up -- draws one box that encloses both,
- * trash included. */
-.batch .portraitRow:has(> .queueItem.active) {
-  background: #52446f66;
-  border-color: #bca1ff;
-}
-.batch .portraitRow > .queueItem.active {
-  background: none !important;
-  border-color: transparent !important;
-}
+
+/* One selection button fills the card; the sibling trash button overlays its
+   reserved status-row space without nesting interactive elements. */
+.batch .queue { display:flex; flex-direction:column; flex-wrap:nowrap; overflow-y:auto; overflow-x:hidden; gap:8px; padding:8px; min-height:0; }
+.batch .portraitRow { position:relative; flex:0 0 96px; width:100%; height:96px; min-height:96px; border:0; border-radius:7px; overflow:hidden; background:transparent; }
+.batch .portraitRow:hover { background:#ffffff08; }
+.batch .portraitRow > .queueItem { display:grid; grid-template-columns:62px minmax(0,1fr); grid-template-rows:1fr 26px; column-gap:9px!important; row-gap:0!important; width:100%; height:100%; min-height:0; padding:8px!important; margin:0; border:0!important; border-radius:7px; background:transparent!important; align-items:center; text-align:left; box-shadow:none; }
+.batch .portraitRow > .queueItem img { grid-column:1; grid-row:1 / 3; width:62px!important; height:76px!important; object-fit:contain; border-radius:4px; }
+.batch .portraitRow .qText { grid-column:2; min-width:0; padding:0!important; display:block; }
+.batch .portraitRow .qText strong { font-size:12px; display:block; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.batch .portraitRow .originalDimensions { font-size:10px; color:#b1b4c8; display:block; margin-top:4px; white-space:normal; }
+.batch .portraitStatusRow { grid-column:2; display:flex; align-items:center; padding:0 28px 0 0!important; min-width:0; border:0!important; background:none; }
+.batch .portraitStatusRow em { font-size:11px; font-style:normal; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.batch .portraitStatusRow em::before { content:'●'; margin-right:5px; }
+.batch .portraitTrash { position:absolute; right:8px; bottom:9px; width:24px; height:24px; min-height:0; padding:4px; margin:0; display:grid; place-items:center; z-index:1; }
+.batch .portraitTrash svg { width:13px; height:13px; }
+.batch .portraitRow:has(>.queueItem.active) { background:#52446f66; box-shadow:inset 0 0 0 1px #bca1ff; }
+.batch .portraitRow > .queueItem.active { box-shadow:none!important; outline:0; }
+.batch .portraitRow > .queueItem:focus-visible { outline:2px solid #bca1ff; outline-offset:-3px; }
+.batch[data-orientation=horizontal] .queue { flex-direction:row; align-items:flex-start; overflow-x:auto; overflow-y:hidden; }
+.batch[data-orientation=horizontal] .portraitRow { flex:0 0 112px; width:112px; height:96px; }
+.batch[data-orientation=horizontal] .queueItem { grid-template-columns:minmax(0,1fr); grid-template-rows:38px 29px 21px; padding:4px 6px!important; gap:0!important; }
+.batch[data-orientation=horizontal] .queueItem img { grid-column:1; grid-row:1; width:100%!important; height:38px!important; object-fit:cover; object-position:center 30%; }
+.batch[data-orientation=horizontal] .qText { grid-column:1; }
+.batch[data-orientation=horizontal] .qText strong { font-size:9px; }
+.batch[data-orientation=horizontal] .originalDimensions { font-size:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+.batch[data-orientation=horizontal] .portraitStatusRow { grid-column:1; padding-right:22px!important; }
+.batch[data-orientation=horizontal] .portraitStatusRow em { font-size:8px; }
+.batch[data-orientation=horizontal] .portraitTrash { right:6px; bottom:5px; width:19px; height:19px; padding:3px; }
 
 /* --- Responsive tool panels (Output Size, Color, Detail, Mask) ------------ */
 /* Stack side-by-side rows once the panel is too narrow for them, before
@@ -452,18 +364,35 @@
 @container (max-width: 300px) {
   .dockPanelBody .outputDimensions .dimDpi { flex: 1 0 100%; justify-content: flex-start; margin-top: 2px; }
 }
+/* clarette.css's .curveBox rules (three separate appended overrides) settle
+ * on border-radius:0 -- square corners, but the canvas is display:block
+ * filling the box edge-to-edge with its own square corners, so a square
+ * border reads as intact. Rounding it here without also clipping the
+ * canvas would un-hide the canvas's own square corners poking past the
+ * curveBox's now-rounded ones -- overflow:hidden plus a matching radius on
+ * the canvas keeps the two in sync. */
+.dockPanelBody[data-panel='color'] .curveBox {
+  border-radius: 9px;
+  overflow: hidden;
+}
 .dockPanelBody[data-panel='color'] .curveBox canvas#curves {
   width: 100%;
   height: auto;
   min-height: 120px;
   max-width: 280px;
+  border-radius: 8px;
+  display: block;
 }
 
-/* --- Curve Editor header: RGB tabs (left) + Reset/Preview/Auto Color (right) --- */
+/* --- Curve Editor header: RGB dropdown (left) + Reset/Preview/Auto Color (right) --- */
+/* #curveChannel replaces the old separate RGB/R/G/B button row -- one
+ * compact control, and the browser's own <select> already shows the
+ * current selection without extra active-state bookkeeping. */
+.curveTabs #curveChannel { min-height: 26px; padding: 3px 6px; font-size: 11px; width: auto; }
 /* Global Reset/Preview/Auto Color (color-ranges.js moves them here from
  * their old, separate .colorHeaderActions strip); margin-left:auto pins
- * just this group right while "Curves" + the channel tablist stay at their
- * normal flex position on the left, all on .curveTabs's one row. */
+ * just this group right while "Curves" + the channel dropdown stay at
+ * their normal flex position on the left, all on .curveTabs's one row. */
 .curveTabsActions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 @container (max-width: 220px) {
   .dockPanelBody .curveTabs { flex-wrap: wrap; row-gap: 6px; }
@@ -473,9 +402,15 @@
 /* --- Selective color: range swatches, hue spectrum, eyedropper ----------- */
 
 .selectiveColor { margin-top: 10px; }
-.selectiveColorHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+/* flex-wrap, no justify-content:space-between -- swatches takes its natural
+ * width and wraps its own row(s); .rangeTools (eyedropper+reset, always
+ * adjacent) is pinned to the end of the row via its own margin-left:auto
+ * instead, so it never gets shoved apart from the swatches OR split apart
+ * from itself the way a 3-item space-between row would. */
+.selectiveColorHeader { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
 .rangeSwatchLabel { margin: 2px 0 6px; font-size: 11px; }
 .rangeSwatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.rangeTools { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .rangeSwatch {
   width: 22px;
   height: 22px;
@@ -507,6 +442,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* resetColor next to it is a .compactIcon, flex:0 0 30px!important (never
+   * shrinks) -- this needs the same guarantee, or a tight header row
+   * shrinks it below resetColor's fixed 30px and the two stop matching. */
+  flex: none;
   width: 30px;
   height: 30px;
   padding: 0;
@@ -561,13 +500,25 @@
 .hueSpectrumRow { padding-bottom: 10px; }
 .hueInputWrap { position: relative; }
 .hueBrackets { position: absolute; left: 0; right: 0; bottom: -8px; height: 8px; pointer-events: none; }
-.hueBracket {
-  position: absolute;
-  top: 0;
-  width: 2px;
-  height: 8px;
-  background: var(--dv-color-clarette-text, #f2f1f7);
-  transform: translateX(-1px);
-}
-.hueBracket::before { content: ''; position: absolute; top: -3px; left: -3px; width: 8px; height: 3px; border-top: 2px solid currentColor; }
-.hueBracketReference { opacity: 0.55; }
+/* The 368px tools edge reserves a 36px tab rail and at least 328px for Color. */
+.dockPanelBody[data-panel=color] { min-width:328px; overflow-x:hidden; overflow-y:auto; }
+.selectiveColor .rangeSwatch { flex:none; border:1px solid #76717e!important; }
+.selectiveColor .rangeSwatch.active { border-color:#c8adff!important; box-shadow:0 0 0 2px #b39af4!important; }
+.selectiveColor .rangeSwatch[data-range=master], .selectiveColor .rangeSwatch[data-range=master].active { background:#17171c!important; }
+.hueInputWrap { padding-bottom:24px; }
+.hueBrackets { position:absolute; top:auto!important; bottom:1px; left:0; right:0; height:18px; pointer-events:none; background:linear-gradient(to right,red,yellow,lime,cyan,blue,magenta,red); border-radius:3px; }
+.hueRangeSegment { position:absolute; top:3px; height:12px; border:1px solid white; background:#ffffff20; box-sizing:border-box; }
+.hueRangeSegment.falloff { border-style:dashed; background:#0005; }
+.hueRangeMarker { position:absolute; top:0; width:7px; height:18px; min-height:0; padding:0; transform:translateX(-50%); border:1px solid #111; border-radius:2px; background:#fff; pointer-events:auto; cursor:ew-resize; touch-action:none; }
+.hueRangeMarker.outer { background:#302b3c; border-color:#eee; }
+
+.dockPanelBody[data-panel=color] .colorGrid { display:flex!important; flex-direction:column; gap:12px; }
+.dockPanelBody[data-panel=color] .curveBox { width:100%; min-width:0; }
+.dockPanelBody[data-panel=color] .curveBox canvas#curves { width:100%!important; height:180px!important; max-width:none; }
+.dockPanelBody[data-panel=color] .balanceControls { width:100%; }
+.hueBrackets:empty { display:none; }
+.hueInputWrap:not(:has(.hueRangeMarker)) { padding-bottom:0; }
+
+/* Dockview's renderer wrapper receives programmatic focus after dialog.close().
+   WebKit otherwise draws its system focus ring around the entire Preview. */
+.dockview-theme-clarette .dv-render-overlay:focus { outline:none; }

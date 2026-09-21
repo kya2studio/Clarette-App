@@ -31,7 +31,7 @@ const PANEL_CONSTRAINTS = {
   portraits: { minimumWidth: 260, minimumHeight: 200 },
   preview: { minimumWidth: 400, minimumHeight: 320 },
   outputSize: { minimumWidth: 280, minimumHeight: 260 },
-  color: { minimumWidth: 300, minimumHeight: 420 },
+  color: { minimumWidth: 328, minimumHeight: 420 },
   detailMask: { minimumWidth: 280, minimumHeight: 420 },
 };
 const PRESET_KEYS = ['landscape', 'portrait'];
@@ -251,7 +251,7 @@ const TOOLS_EDGE_ID = 'tools';
 let toolsEdgePosition = 'right';
 
 function addToolsEdgeGroup() {
-  dv.addEdgeGroup(toolsEdgePosition, { id: TOOLS_EDGE_ID, initialSize: 360, minimumSize: 240 });
+  dv.addEdgeGroup(toolsEdgePosition, { id: TOOLS_EDGE_ID, initialSize: 368, minimumSize: 368 });
   addPanel('outputSize', { position: { referenceGroup: TOOLS_EDGE_ID, direction: 'within' } });
   addPanel('color', { position: { referenceGroup: TOOLS_EDGE_ID, direction: 'within' } });
   addPanel('detailMask', { position: { referenceGroup: TOOLS_EDGE_ID, direction: 'within' } });
@@ -388,7 +388,10 @@ function applyWorkspaceState(ws, force) {
     const custom = ws.custom && ws.custom[ws.active];
     if (!custom) { buildPreset('landscape'); return; }
     stageAll();
-    try { dv.fromJSON(custom.layout); }
+    try { const saved=structuredClone(custom.layout);
+      for(const edge of Object.values(saved.edgeGroups||{})){if(edge&&typeof edge==='object'){edge.minimumSize=368;if(edge.size)edge.size=Math.max(368,edge.size)}}
+      dv.fromJSON(saved);
+      for(const panel of dv.panels)if(PANEL_CONSTRAINTS[panel.id])panel.api.setConstraints(PANEL_CONSTRAINTS[panel.id]); }
     catch (e) {
       console.error('Clarette: saved workspace layout could not be restored, falling back to Landscape Mode', e);
       buildPreset('landscape');

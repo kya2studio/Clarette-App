@@ -67,6 +67,11 @@ def settings(c):
             value=float(entry.get(ch,0));limit=180 if ch=='hue' else 100
             if not math.isfinite(value):raise ValueError('Invalid color range adjustment')
             out['color_ranges'][name][ch]=max(-limit,min(limit,value))
+        if 'center' in entry or 'bounds' in entry:
+            center=float(entry.get('center',RANGE_HUE_CENTER[name]))
+            bounds=[float(v) for v in entry.get('bounds',[-60,0,0,60])]
+            if not math.isfinite(center) or len(bounds)!=4 or any(not math.isfinite(v) or not -180<=v<=180 for v in bounds) or bounds!=sorted(bounds):raise ValueError('Invalid hue range bounds')
+            out['color_ranges'][name].update(center=center%360,bounds=bounds)
     return out
 
 def curve_values(x,points):
@@ -77,10 +82,16 @@ def curve_values(x,points):
     v=np.clip(np.asarray(x),p[0,0],p[-1,0]);i=np.clip(np.searchsorted(p[:,0],v,side='right')-1,0,len(h)-1);t=(v-p[i,0])/h[i];t2=t*t;t3=t2*t
     return np.clip((2*t3-3*t2+1)*p[i,1]+(t3-2*t2+t)*h[i]*m[i]+(-2*t3+3*t2)*p[i+1,1]+(t3-t2)*h[i]*m[i+1],0,1)
 
-def _hue_weight(hue,center):
+def _hue_weight(hue,center,bounds=None):
     """Triangular falloff: 1 at `center`, 0 by +/-60 degrees away (the
     midpoint to each neighboring range on the wheel), wrapping through 0/360."""
-    d=np.abs((hue-center+180)%360-180)
+    signed=(hue-center+180)%360-180
+    if bounds is not None:
+        a,b,c,d=bounds
+        rise=np.where(signed>=b,1,(signed-a)/max(b-a,1e-6))
+        fall=np.where(signed<=c,1,(d-signed)/max(d-c,1e-6))
+        return np.clip(np.minimum(rise,fall),0,1)
+    d=np.abs(signed)
     return np.clip(1-d/60,0,1)
 
 def color(im,c):
@@ -96,7 +107,7 @@ def color(im,c):
     delta=(c['shadows']/100*.45*(1-lum)**3+c['highlights']/100*.35*lum**3)[:,:,None]
     rgb=np.clip(rgb+delta,0,1)
     ranges=c['color_ranges']
-    if c['hue'] or c['saturation'] or c['lightness'] or any(any(entry.values()) for entry in ranges.values()):
+    if c['hue'] or c['saturation'] or c['lightness'] or any(entry['hue'] or entry['saturation'] or entry['lightness'] for entry in ranges.values()):
         import cv2
         hsv=cv2.cvtColor(rgb,cv2.COLOR_RGB2HSV)
         h,s,v=hsv[:,:,0],hsv[:,:,1],hsv[:,:,2]
@@ -110,7 +121,7 @@ def color(im,c):
         v_shifted=np.clip(v*(1+c['lightness']/100),0,1)
         for name,entry in ranges.items():
             if not (entry['hue'] or entry['saturation'] or entry['lightness']):continue
-            weight=_hue_weight(h,RANGE_HUE_CENTER[name])
+            weight=_hue_weight(h,entry.get('center',RANGE_HUE_CENTER[name]),entry.get('bounds'))
             h_shifted=(h_shifted+weight*entry['hue'])%360
             s_shifted=np.clip(s_shifted*(1+weight*entry['saturation']/100),0,1)
             v_shifted=np.clip(v_shifted*(1+weight*entry['lightness']/100),0,1)
@@ -125,30 +136,148 @@ def color(im,c):
     a[:,:,:3]=np.uint8(np.clip(np.rint(rgb*255),0,255));return Image.fromarray(a)
 
 def auto_color(im):
-    """Conservative luminance correction; chroma requires distributed neutral evidence."""
+    """Analyzes the actual image and proposes values for the existing Color
+    controls -- Exposure, White Balance/Tint, Saturation, Shadows,
+    Highlights, and a contrast curve -- each only when the analysis shows a
+    real need, not a fixed preset applied to every portrait alike. Every
+    result lands in the same editable fields the manual sliders use (never
+    baked into a separate hidden adjustment), stays conservative, and skims
+    skin-toned pixels out of the measurements that would otherwise be
+    thrown off by them (white balance, saturation)."""
     small=im.copy();small.thumbnail((512,512));a=np.array(small);rgb=a[:,:,:3].astype(float)/255
-    lum=rgb@np.array([.2126,.7152,.0722]);valid=(a[:,:,3]>240)&(lum>.08)&(lum<.95)
+    lum=rgb@np.array([.2126,.7152,.0722]);valid=(a[:,:,3]>240)&(lum>.03)&(lum<.99)
     c=color_defaults()
     # Identity control points keep manual channel curves neutral by default.
     for ch in ('red','green','blue'):c[ch]=[[0,0],[.5,.5],[1,1]]
     if not np.any(valid):return c
     r,g,b=rgb[:,:,0],rgb[:,:,1],rgb[:,:,2]
-    skin=(r>g*1.02)&(r>b*1.07)&(r-b>.025)&(g>b*.8)
+    skin=(r>g*1.02)&(r>b*1.07)&(r-b>.025)&(g>b*.8)&valid
     spread=rgb.max(2)-rgb.min(2)
-    neutral=valid&~skin&(lum>.3)&(spread<.14)&(spread/np.maximum(lum,.01)<.24)
-    # Require references across brightness ranges, not a single colored background.
-    samples=rgb[neutral]
-    if len(samples)>max(100,valid.sum()*.08) and np.std(samples.mean(1))>.08:
-        estimate=np.median(samples/np.maximum(samples.mean(1,keepdims=True),.01),axis=0)
-        if np.max(np.abs(estimate-1))>.035:
+    relative_spread=spread/np.maximum(lum,.01)
+
+    # --- White balance / Tint -----------------------------------------
+    # A hard "does this pixel look neutral" cutoff has an inherent conflict:
+    # loose enough to still catch a real color cast's shifted-but-meant-to-
+    # be-neutral surfaces (background, walls), it also lets through a
+    # moderately-saturated colored object (a blue shirt, say) that a strong
+    # cast happens to have pushed toward a lower spread reading too --
+    # contaminating the very estimate meant to correct for that cast. A
+    # per-pixel weight instead of a cutoff avoids picking one bad tradeoff:
+    # every non-clipped, non-black pixel contributes to the gray-world
+    # estimate, weighted down continuously as its own relative (hue-driven,
+    # not brightness-driven) spread rises, so genuinely colorful surfaces
+    # are naturally almost silent without a hard line that both a
+    # cast-shifted neutral and a desaturated color can land on the wrong
+    # side of. lum<.92/>.05 excludes near-clipped/near-black pixels, whose
+    # channel ratios no longer reflect the real scene color.
+    #
+    # Skin gets strongly discounted (not zeroed): the skin heuristic is
+    # itself hue-based ("red dominates"), so a strong-enough warm cast
+    # makes it fire on background/walls too -- if skin were excluded
+    # outright, that specific cast would starve the estimate of most of
+    # its evidence at exactly the moment it needs it most. A small residual
+    # weight keeps some signal available in that edge case while still
+    # leaving skin's own true color a minor contributor whenever real
+    # non-skin evidence (the normal case) is available to dominate instead.
+    weight=np.clip(1-relative_spread/.45,0,1)*np.where(skin,.12,1)*(valid&(lum>.05)&(lum<.92))
+    total_weight=float(weight.sum())
+    if total_weight>valid.sum()*.05:
+        # A weighted *median* per channel ratio, not a weighted mean: a
+        # sizeable contiguous colored area (a shirt, say) can still carry
+        # real total weight even after the continuous falloff above --
+        # enough to visibly skew a mean, but a median only follows whatever
+        # holds an outright majority of the weighted mass, which the actual
+        # neutral surfaces (background, wall) normally do in a portrait.
+        mask=weight>0
+        flat_w=weight[mask];flat_rgb=rgb[mask];flat_lum=lum[mask]
+        ratios=flat_rgb/np.maximum(flat_rgb.mean(1,keepdims=True),.01)
+        def weighted_median(values,weights):
+            order=np.argsort(values);v,ws=values[order],weights[order]
+            cum=np.cumsum(ws);i=np.searchsorted(cum,cum[-1]/2)
+            return float(v[min(i,len(v)-1)])
+        estimate=np.array([weighted_median(ratios[:,i],flat_w) for i in range(3)])
+        # Spread the weight across enough distinct brightness levels to
+        # trust the estimate -- otherwise a single small near-neutral patch
+        # (or a cast so strong nothing scores much weight beyond one small
+        # region) could pass the total-weight bar alone.
+        brightness_spread=float(np.sqrt(np.average((flat_lum-np.average(flat_lum,weights=flat_w))**2,weights=flat_w)))
+        if brightness_spread>.05:
+            # Tighter than the temperature/tint fields' own +/-18 clamp allows
+            # (18 * .0015 = 2.7%, vs. this 3%) so a small, noisy estimate --
+            # not a real cast -- can't still get amplified all the way to
+            # that clamp's ceiling by the /.003 conversion below; a genuine,
+            # larger cast still reaches it.
             gains=np.clip(1/estimate,.97,1.03)
-            for i,ch in enumerate(('red','green','blue')):c[ch][1][1]=float(.5*gains[i])
-    vals=lum[valid];mid=float(np.median(vals));low,high=np.quantile(vals,[.05,.95])
-    c['shadows']=round(np.clip((.38-mid)*24,-3,8))
-    c['highlights']=round(np.clip((.9-high)*35,-7,0))
-    # A shared curve adjusts exposure without shifting one color independently.
-    delta=float(np.clip((.42-mid)*.12,-.025,.035))
-    c['rgb']=[[0,0],[.5,.5+delta],[1,1]]
+            g_r,g_g,g_b=(float(x) for x in gains)
+            # Inverting color()'s own R=1+.0015T+.0005Ti, G=1-.001Ti,
+            # B=1-.0015T+.0005Ti -- solved back into the same temperature/
+            # tint fields the manual sliders edit, not a separate, invisible
+            # per-channel curve the way this used to work.
+            tint=float(np.clip((1-g_g)*1000,-18,18))
+            temperature=float(np.clip((g_r-g_b)/.003,-18,18))
+            if abs(temperature)>=1:c['temperature']=round(temperature)
+            if abs(tint)>=1:c['tint']=round(tint)
+
+    vals=lum[valid]
+    mid=float(np.median(vals));low,high=np.quantile(vals,[.05,.95])
+    p1,p99=np.quantile(vals,[.01,.99])
+
+    # --- Exposure --------------------------------------------------------
+    # Only nudges the midtone toward a typical well-exposed portrait level;
+    # a small coefficient and clamp keep an already-reasonable exposure
+    # from being pushed around, and a badly under/overexposed portrait
+    # (which needs more correction than this alone should attempt) still
+    # gets a bounded, non-extreme starting point the user can refine.
+    c['exposure']=round(float(np.clip((.45-mid)*20,-12,12)))
+
+    # --- Shadows / Highlights --------------------------------------------
+    # Distinguishes genuinely *clipped* shadow/highlight detail (a real
+    # fraction of pixels pinned at the extreme) from a portrait that's
+    # simply on the darker or brighter side but has no clipping to recover
+    # -- the clipped-fraction terms only add correction when there's
+    # something to actually recover, instead of every image with a low 5th
+    # percentile or high 95th one getting the same fixed push.
+    crushed=float(np.mean(vals<.02));blown=float(np.mean(vals>.985))
+    c['shadows']=round(float(np.clip((.12-low)*26+crushed*40,-3,10)))
+    c['highlights']=round(float(np.clip((high-.92)*-26-blown*45,-12,2)))
+
+    # A real portrait always has *some* luminance variation -- skin vs.
+    # hair vs. background vs. shadow -- so a near-uniform frame (a flat
+    # test swatch, or a solid color filling the whole crop) isn't really a
+    # "photo" the contrast/saturation analysis below was designed to read;
+    # applying either to a single flat tone doesn't correct anything real
+    # and can only nudge an already-arbitrary color further off, with
+    # nothing to conservatively measure it against.
+    has_variation=float(np.std(vals))>.008
+
+    # --- Contrast (curve-based) -------------------------------------------
+    # A gentle 3-point S-curve on the master RGB curve, added only when the
+    # image actually measures low-contrast (a narrow 1st-99th percentile
+    # spread) -- deliberately mild and tapered toward both ends so it lifts
+    # midtone contrast without crushing shadows or blowing highlights the
+    # way a strong/generic S-curve would.
+    contrast_range=float(p99-p1)
+    if has_variation and contrast_range<.55:
+        boost=float(np.clip((.62-contrast_range)*.16,0,.05))
+        c['rgb']=[[0,0],[.25,max(0.0,.25-boost)],[.5,.5],[.75,min(1.0,.75+boost)],[1,1]]
+
+    # --- Saturation --------------------------------------------------------
+    # Measured on non-skin pixels only -- skin is naturally less saturated
+    # than foliage/clothing/background and would otherwise read as "the
+    # whole photo is pale" and pull every hue up together. The correction
+    # itself is still global (there's one Saturation slider), so a
+    # significant skin fraction in frame halves the boost's strength as a
+    # safety margin against visibly reddening faces.
+    sat_area=valid&~skin
+    if has_variation and np.any(sat_area):
+        import cv2
+        hsv_small=cv2.cvtColor(rgb.astype(np.float32),cv2.COLOR_RGB2HSV)
+        avg_sat=float(np.median(hsv_small[:,:,1][sat_area]))
+        skin_fraction=float(np.mean(skin))/max(float(np.mean(valid)),.01)
+        raw=(.38-avg_sat)*36
+        if skin_fraction>.12:raw*=.55
+        c['saturation']=round(float(np.clip(raw,-10,12)))
+
     return c
 
 def download(url,path,report=lambda s:None):

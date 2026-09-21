@@ -128,9 +128,40 @@ button:focus:not(:focus-visible){outline:none!important;box-shadow:none!importan
 .editor .canvasTools #brushTools{width:30px!important;flex-shrink:0}
 .editor .canvasTools button,.editor .canvasTools #brushTools>button,.editor #brushTools #lockPosition{width:30px!important;min-width:30px!important;height:30px!important;min-height:30px!important;flex:0 0 30px!important;padding:4px!important}
 .editor .canvasTools button:focus-visible{outline-offset:1px}
-#notificationStack{position:absolute;top:48px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 32px);z-index:80;background:#2c2638d9;backdrop-filter:blur(12px);border:1px solid #ad93d080;border-radius:11px;box-shadow:0 5px 18px #0003;overflow:hidden;pointer-events:auto}
-.editor #notificationStack #jobbar,.editor #notificationStack #toast{position:static!important;transform:none!important;max-width:100%!important;width:auto!important;min-width:0!important;border:0!important;box-shadow:none!important;background:none!important;backdrop-filter:none!important;margin:0!important;border-radius:0!important}
-.editor #notificationStack #toast{padding:0!important}.notice{padding:10px 14px}.notice+.notice{border-top:1px solid #ffffff18}.notice.error{color:#ffb6c5}
+/* Position/z-index/pointer-events are dockview-theme.css's job (one source
+ * of truth) -- this used to duplicate them with a *different* top/left/
+ * transform (48px-from-top instead of 50%-centered), from before that
+ * newer centered version existed. Two competing position+transform
+ * declarations on the same element, both non-!important with no stable
+ * winner across the various stray rules touching it (see the jobbar/toast
+ * flattening fix above), is exactly what produced a notification that
+ * measured as centered in one check and pinned to the left edge with no
+ * horizontal translation at all in another -- effectively wrapping "" text
+ * behavior would depend on which combination happened to win at that
+ * moment. Only the *visual card* styling belongs here now. */
+/* calc(100% - 32px) let a long message grow nearly full-topbar-width
+ * before ever wrapping -- wide enough to sit *underneath* the brand logo
+ * and the toolbar icon buttons on either side (both are position:static
+ * flex children of .topbar, unaffected by this absolutely-positioned
+ * overlay, so nothing stopped it growing right through them). 480px
+ * forces long text to wrap onto a second/third line instead, and the
+ * calc() term keeps it clear of the ~240px logo + ~415px icon row on
+ * either side even in a fairly narrow window. */
+#notificationStack{width:max-content;max-width:min(480px,calc(100% - 750px));background:#2c2638d9;backdrop-filter:blur(12px);border:1px solid #ad93d080;border-radius:11px;box-shadow:0 5px 18px #0003;overflow:hidden}
+/* #jobbar/#toast still carry their own old floating-card styling (fixed
+ * widths, borders, background, position/transform math meant for sitting
+ * alone over the Preview panel) from style.css/clarette.css -- this is
+ * supposed to strip all of that back to plain content so the *one* outer
+ * card is #notificationStack itself (styled just below), not a second,
+ * differently-positioned box nested inside it. It never actually matched:
+ * written as ".editor #notificationStack ..." from when the stack lived
+ * inside .editor (over Preview) -- #notificationStack moved into .topbar
+ * (see compact-controls.js) without this selector being updated, so it's
+ * matched nothing since, leaving both the stale card styling AND this
+ * flattening un-applied at the same time, stacked as two visibly separate
+ * boxes with two different position/transform origins. */
+#notificationStack #jobbar,#notificationStack #toast{position:static!important;transform:none!important;max-width:100%!important;width:auto!important;min-width:0!important;border:0!important;box-shadow:none!important;background:none!important;backdrop-filter:none!important;margin:0!important;border-radius:0!important}
+#notificationStack #toast{padding:0!important}.notice{padding:10px 14px}.notice+.notice{border-top:1px solid #ffffff18}.notice.error{color:#ffb6c5}
 
 .topbar .appIcon{width:28px;height:28px;object-fit:contain;display:block}
 
@@ -138,7 +169,7 @@ button:focus:not(:focus-visible){outline:none!important;box-shadow:none!importan
    Refine Edges dialog where the checkbox and the primary button sat on the
    same line because .check is inline-flex and <button> is inline-block by
    default, so nothing forced a line break between them. */
-.compactIcon:hover,.previewToggle:hover{background:#33364a}
+.compactIcon:hover,.previewToggle:hover,.eyedropperButton:hover{background:#33364a}
 #edgesDialog[open]{display:flex;flex-direction:column;gap:10px}
 #edgesDialog #runEdges{align-self:flex-end;margin:0}
 
