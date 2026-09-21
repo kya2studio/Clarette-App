@@ -98,14 +98,45 @@
   fill: currentColor;
   opacity: 0.55;
 }
-.clarette-tab-handle-only {
-  padding: 0 6px;
-  gap: 0;
+/* Portraits/Preview's tab hosts their own in-content heading (moved in by
+ * dockview-workspace.js's createTab()) instead of a plain text label, so the
+ * panel body doesn't repeat it below a second, separate header strip.
+ * Those headings carry their own font-size/weight/layout from clarette.css;
+ * this just fits that into the 36px tab strip instead of its old full-size
+ * content-header footprint, and lets it grow to fill the tab (it's the only
+ * tab in an always-solo group, so there's nothing else to share the row with). */
+.clarette-tab-heading {
+  flex: 1;
+  min-width: 0;
+  gap: 10px;
 }
+.clarette-tab-heading > * {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.clarette-tab-heading .batchMeta,
+.clarette-tab-heading #canvasSizeBadge {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+/* Their title text left with the tab above; what's left in the content
+ * header itself is just occasional/secondary controls (the restore-portrait
+ * button, Preview's display-mode toggles), so the row shrinks to fit only
+ * those instead of the fixed height sized for a now-absent heading. */
+.batch .batchbar { height: auto; min-height: 0; padding: 8px 18px; }
+.editor .editorHead { height: auto; min-height: 0; padding: 8px 18px; }
 /* Drag Panels off (Settings > Workspace) locks the workspace -- panels stay
- * usable but can't be dragged, so the handle disappears along with that
+ * usable but can't be dragged or moved, so these disappear along with that
  * ability instead of sitting there doing nothing. */
-.layoutLocked .clarette-tab-grip { display: none; }
+.layoutLocked .clarette-tab-grip,
+.layoutLocked .clarette-move-toggle { display: none; }
 
 .tabDivider {
   border: none;
@@ -136,6 +167,28 @@
 }
 .clarette-collapse-toggle svg { width: 14px; height: 14px; transform: rotate(180deg); transition: transform 0.15s ease; }
 .clarette-collapse-toggle.collapsed svg { transform: rotate(0deg); }
+
+/* Swap-sides button, same treatment as the collapse chevron but in the
+ * header's left-action slot so the two don't collide. */
+.clarette-move-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 4px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dv-color-clarette-muted);
+  cursor: pointer;
+}
+.clarette-move-toggle:hover {
+  background: rgba(179, 154, 244, 0.14);
+  color: var(--dv-color-clarette-text);
+}
+.clarette-move-toggle svg { width: 14px; height: 14px; }
 
 /* Dockview's own `.dv-content-container` is a bounded flex item
  * (flex-grow:1;min-height:0), but it does not stretch a plain block child to

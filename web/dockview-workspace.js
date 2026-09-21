@@ -95,28 +95,53 @@ stageAll();
 
 // Every tab leads with a small grip icon -- a visible "this can be dragged"
 // affordance, since the tab itself is dockview's native drag handle (no
-// custom drag-initiation code needed). Portraits/Preview are always alone in
-// their group with nothing to switch between, so their tab drops the text
-// label (redundant with the in-content "Portraits · N"/"Preview" heading)
-// and is grip-only; the tools group's tabs keep their label to distinguish
-// Output/Color/Detail & Mask. Hidden entirely while the workspace is locked
-// (.layoutLocked, set below), since dragging is disabled then too.
+// custom drag-initiation code needed).
+//
+// Portraits/Preview are always alone in their group, so a tab there used to
+// just repeat "Portraits"/"Preview" right above their own in-content
+// heading ("Portraits · N", "Preview 2048x1024...") -- a second header-height
+// strip for no new information. Rather than drop the tab back to
+// grip-only (which was the previous fix, but wastes that whole strip) or
+// hide it again (losing the drag handle, the complaint that led to grip-only
+// in the first place), those two headings move *into* the tab itself: one
+// header row does both jobs, and the panel body starts right under it.
+// Their own elements move (not clones), so app.js's/v1.js's existing
+// listeners and the code that keeps them updated on every render
+// (`$('batchCount').replaceChildren(...)`, etc.) keep working untouched.
 const GRIP_SVG = '<svg class="clarette-tab-grip" viewBox="0 0 10 16" aria-hidden="true"><circle cx="2.5" cy="2.5" r="1.3"/><circle cx="7.5" cy="2.5" r="1.3"/><circle cx="2.5" cy="8" r="1.3"/><circle cx="7.5" cy="8" r="1.3"/><circle cx="2.5" cy="13.5" r="1.3"/><circle cx="7.5" cy="13.5" r="1.3"/></svg>';
-const SOLO_TITLES = new Set(['Portraits', 'Preview']);
+const SOLO_HEADING = {
+  portraits: () => document.getElementById('batchCount'),
+  preview: () => document.querySelector('.previewHeading'),
+};
 function createTab() {
   const element = document.createElement('div');
   element.className = 'clarette-tab';
   element.insertAdjacentHTML('afterbegin', GRIP_SVG);
   const span = document.createElement('span');
   element.append(span);
+  let movedHeading = null;
   return {
     element,
     init(params) {
-      const solo = SOLO_TITLES.has(params.title);
-      element.classList.toggle('clarette-tab-handle-only', solo);
-      span.textContent = solo ? '' : (params.title || '');
+      const soloHeading = SOLO_HEADING[params.api.id]?.();
+      if (soloHeading) {
+        element.classList.add('clarette-tab-heading');
+        span.remove();
+        movedHeading = soloHeading;
+        element.append(movedHeading);
+      } else {
+        span.textContent = params.title || '';
+      }
     },
-    dispose() {},
+    dispose() {
+      // The heading is the live element other scripts keep updating by ID
+      // (`$('batchCount').replaceChildren(...)`, etc.) -- a preset rebuild
+      // disposes every current tab before the next buildPreset() creates
+      // fresh ones, so parking it under <body> (same staging trick as
+      // stageAll() below) keeps it connected and findable by the next tab's
+      // init() in between, rather than vanishing with this disposed tab.
+      if (movedHeading) document.body.appendChild(movedHeading);
+    },
   };
 }
 
@@ -176,6 +201,7 @@ const dv = DV.createDockview(layoutEl, {
   defaultTabComponent: 'clarette',
   createTabComponent: () => createTab(),
   createRightHeaderActionComponent: (group) => createCollapseToggle(group),
+  createLeftHeaderActionComponent: (group) => createMoveToggle(group),
   createComponent: (options) => ({
     element: PANEL_ELEMENTS[options.id],
     init() { PANEL_ELEMENTS[options.id].style.display = ''; },
@@ -198,23 +224,43 @@ function addPanel(id, extra) {
   }, PANEL_CONSTRAINTS[id], extra));
 }
 
-// The tools group docks to the layout's right edge (a real Dockview "edge
-// group", the same primitive VS Code's collapsible sidebars use) rather than
-// living in the regular grid. That's what makes minimizing it a single
-// built-in group.api.collapse() instead of hand-rolled constraint/size
-// hacking -- and it comes with a free bonus: clicking the already-active
-// tab toggles collapse/expand on its own, on top of the explicit chevron
-// button added via createRightHeaderActionComponent below.
+// The tools group docks to a layout edge (a real Dockview "edge group", the
+// same primitive VS Code's collapsible sidebars use) rather than living in
+// the regular grid. That's what makes minimizing it a single built-in
+// group.api.collapse() instead of hand-rolled constraint/size hacking -- and
+// it comes with a free bonus: clicking the already-active tab toggles
+// collapse/expand on its own, on top of the explicit chevron button added
+// via createRightHeaderActionComponent below.
+//
+// The tradeoff: an edge group is anchored to whichever edge it was created
+// on, not freely draggable there the way a regular grid panel is (this is
+// also how VS Code's own sidebar works -- moved via a command/setting, not
+// by dragging it across the window). "Move to the other side" is therefore
+// its own explicit action (the swap-sides button below), not a drag gesture.
 const TOOLS_EDGE_ID = 'tools';
+let toolsEdgePosition = 'right';
+
+function addToolsEdgeGroup() {
+  dv.addEdgeGroup(toolsEdgePosition, { id: TOOLS_EDGE_ID, initialSize: 360, minimumSize: 240 });
+  addPanel('outputSize', { position: { referenceGroup: TOOLS_EDGE_ID, direction: 'within' } });
+  addPanel('color', { position: { referenceGroup: TOOLS_EDGE_ID, direction: 'within' } });
+  addPanel('detailMask', { position: { referenceGroup: TOOLS_EDGE_ID, direction: 'within' } });
+}
 
 function buildPreset(key) {
   dv.clear();
   stageAll();
   // dv.clear() empties the grid but does not remove edge groups -- without
-  // this, the second buildPreset() call (any workspace switch after the
-  // first) throws "edge group already exists at position 'right'".
-  try { dv.removeEdgeGroup('right'); } catch (e) { /* none registered yet */ }
-  dv.addEdgeGroup('right', { id: TOOLS_EDGE_ID, initialSize: 360, minimumSize: 240 });
+  // this, the next addEdgeGroup() throws "edge group already exists at
+  // position '...'". Removing *both* positions rather than just the one
+  // toolsEdgePosition currently claims is deliberate: if a caller changes
+  // toolsEdgePosition before calling buildPreset() (restore-default resets
+  // it to 'right' before rebuilding), the group that's actually still
+  // registered may be at the *other* position, and the tracked variable is
+  // no longer a reliable pointer to it -- removing whichever one(s) really
+  // exist avoids ending up with two.
+  try { dv.removeEdgeGroup('left'); } catch (e) { /* none registered */ }
+  try { dv.removeEdgeGroup('right'); } catch (e) { /* none registered */ }
   if (key === 'landscape') {
     // Portraits as a wide, short filmstrip across the top (see the
     // min-aspect-ratio container query in dockview-theme.css), Preview below it.
@@ -227,9 +273,30 @@ function buildPreset(key) {
     addPanel('portraits', { initialWidth: 260 });
     addPanel('preview', { position: { referencePanel: 'portraits', direction: 'right' } });
   }
-  addPanel('outputSize', { position: { referenceGroup: TOOLS_EDGE_ID, direction: 'within' } });
-  addPanel('color', { position: { referenceGroup: TOOLS_EDGE_ID, direction: 'within' } });
-  addPanel('detailMask', { position: { referenceGroup: TOOLS_EDGE_ID, direction: 'within' } });
+  addToolsEdgeGroup();
+}
+
+// Swap-sides button for the tools edge group: tears it down at its current
+// edge and rebuilds it at the other one, keeping Portraits/Preview as they
+// are. Registered as a *left* header action so it doesn't collide with the
+// collapse chevron's right-header slot.
+function moveToolsEdge() {
+  try { dv.removeEdgeGroup(toolsEdgePosition); } catch (e) { /* none registered */ }
+  toolsEdgePosition = toolsEdgePosition === 'right' ? 'left' : 'right';
+  addToolsEdgeGroup();
+}
+function createMoveToggle(group) {
+  if (group.api.location.type !== 'edge') {
+    return { element: document.createElement('span'), init() {}, dispose() {} };
+  }
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'clarette-move-toggle';
+  button.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3h12M2 8h8M2 13h12M11 5.5 13.5 8 11 10.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  button.title = 'Move to the other side';
+  button.setAttribute('aria-label', 'Move tools panel to the other side');
+  button.onclick = moveToolsEdge;
+  return { element: button, init() {}, dispose() {} };
 }
 
 // dockview aggregates panel/group mutations into onDidLayoutChange via its
@@ -356,7 +423,14 @@ registerCommand('workspace-reset', guarded(async () => {
   await refresh();
 }));
 registerCommand('workspace-restore-default', guarded(async () => {
+  // toolsEdgePosition is client-side-only state (a move-to-the-other-side
+  // click, not something the saved layout tracks), so a plain preset
+  // rebuild wouldn't reset it on its own -- and if the active workspace id
+  // isn't actually changing, applyWorkspaceState's signature check would
+  // skip rebuilding at all (see 'workspace-reset' above for the same fix).
+  toolsEdgePosition = 'right';
   await api('/api/workspace', { operation: 'restore-default' });
+  signature = '';
   await refresh();
 }));
 
