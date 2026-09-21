@@ -3,15 +3,12 @@
 // its own Hue/Saturation/Lightness deltas blended in by imaging.py's/
 // color-worker.js's shared triangular hue-falloff.
 //
-// v1.js already pulls Hue/Saturation out of the "More color adjustments"
-// <details> into a floating #colorPopover (a nicer take on the same
-// disclosure UX) and removes the now-empty <details> outright -- by the
-// time this script runs, .advancedColor is gone and Hue/Saturation live in
-// that popover instead. This un-collapses them a second time, all the way
-// into the always-visible panel instead of a click-to-open popover, since
-// they're core to the new selective-color controls, not an aside.
-// #colorPopover survives (v1.js also parks its own resetColor button there),
-// just without these two rows.
+// Hue/Saturation/Tint and the Reset (discard draft) button used to live
+// behind a click-to-open "Advanced color" popover -- removed outright
+// (see v1.js) once these controls became core, always-visible parts of the
+// panel rather than an aside worth hiding. v1.js parks their elements on
+// <body> for this script to claim; grabbing them by id works the same
+// regardless of which element currently holds them.
 (() => {
 'use strict';
 
@@ -97,6 +94,18 @@ function swatchLabel() {
   return p;
 }
 colorSection.append(selective);
+
+// Apply Color commits every pending edit in this panel, curves through
+// Tint -- keeping it above the selective-color controls read as "this only
+// covers what's above me". Moving .colorActions (its status text travels
+// with it) after .selective puts it back at the true bottom, following
+// everything it actually applies. resetColor ("discard draft, revert to
+// last applied") was the one thing left stranded by removing the
+// now-pointless "Advanced color" popover it used to live in -- paired
+// alongside Apply Color is exactly where a "revert" action belongs anyway.
+const colorActions = document.querySelector('.colorActions');
+colorActions.prepend($('resetColor'));
+colorSection.append(colorActions);
 
 // Exposure and Grain: new global (Master-only, like White balance) adjustments,
 // alongside the existing White balance/Shadows/Highlights group layout.js

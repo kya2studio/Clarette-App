@@ -264,14 +264,22 @@ function buildPreset(key) {
   if (key === 'landscape') {
     // Portraits as a wide, short filmstrip across the top (see the
     // min-aspect-ratio container query in dockview-theme.css), Preview below it.
-    addPanel('portraits', { initialHeight: 220 });
-    addPanel('preview', { position: { referencePanel: 'portraits', direction: 'below' } });
+    // dockview's initialHeight/initialWidth sizes whichever panel is the *new*
+    // split-off group (position.referencePanel is the one already placed) --
+    // so Preview goes in first, full-size, and Portraits splits off *from* it
+    // with the explicit size; giving the size to Portraits while it was the
+    // one being added first (with no position yet to split) had no effect at
+    // all, leaving both sides an even 50/50 default instead of this filmstrip.
+    addPanel('preview', {});
+    addPanel('portraits', { position: { referencePanel: 'preview', direction: 'above' }, initialHeight: 220 });
   } else {
     // 'portrait', and the fallback for anything unrecognised: Portraits as
     // a narrow list on the left, Preview centered -- three columns overall
-    // once the tools edge group is added below.
-    addPanel('portraits', { initialWidth: 260 });
-    addPanel('preview', { position: { referencePanel: 'portraits', direction: 'right' } });
+    // once the tools edge group is added below. Same reasoning as above:
+    // Preview first (full width), Portraits splits off to its left with the
+    // explicit width.
+    addPanel('preview', {});
+    addPanel('portraits', { position: { referencePanel: 'preview', direction: 'left' }, initialWidth: 260 });
   }
   addToolsEdgeGroup();
 }

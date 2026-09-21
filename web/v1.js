@@ -134,23 +134,26 @@ const drawCompactPreview=draw;draw=function(){syncGuideButton();drawCompactPrevi
 
 const previewHeaderActions=document.createElement('div');previewHeaderActions.className='previewHeaderActions';previewHeaderActions.setAttribute('role','group');previewHeaderActions.setAttribute('aria-label','Preview display');document.querySelector('.editorHead').append(previewHeaderActions);for(const id of ['before','cutoutToggle','previewBackground'])previewHeaderActions.append($(id));
 
-const restorePortrait=makeButton('restorePortrait',phosphor['arrow-counter-clockwise'],'Restore last removed portrait');restorePortrait.className='compactIcon filledIcon';restorePortrait.hidden=true;$('batchCount').after(restorePortrait);restorePortrait.onclick=guarded(async()=>{const r=await api('/api/restore-portrait',{batch:batch.id});selected=r.id;await refresh(true)});
+const restorePortrait=makeButton('restorePortrait',phosphor['arrow-counter-clockwise'],'Restore last removed portrait');restorePortrait.className='compactIcon filledIcon';restorePortrait.hidden=true;$('clearPortraits').after(restorePortrait);restorePortrait.onclick=guarded(async()=>{const r=await api('/api/restore-portrait',{batch:batch.id});selected=r.id;await refresh(true)});
 const renderWithRemovedPortraits=renderOutput;renderOutput=function(){renderWithRemovedPortraits();restorePortrait.hidden=!batch?.removed_files?.length;restorePortrait.disabled=busy};
 
 // Keep the editor free of duplicate advanced disclosure rows.
 detailInfo.hidden=true;advancedPosition.hidden=true;
 
 // Advanced color lives in an anchored floating panel, without duplicate actions.
-const advancedColorButton=makeButton('advancedColorButton',phosphor['sliders-horizontal'],'Advanced color');advancedColorButton.className='compactIcon filledIcon';advancedColorButton.setAttribute('aria-expanded','false');$('previewColor').before(advancedColorButton);
-const colorPopover=document.createElement('div');colorPopover.id='colorPopover';colorPopover.hidden=true;colorPopover.setAttribute('role','dialog');colorPopover.setAttribute('aria-label','Advanced color');colorPopover.innerHTML='<div class="colorPopoverHead"><span>Color adjustments</span><button type="button" id="closeAdvancedColor" aria-label="Close color adjustments">×</button></div>';document.body.append(colorPopover);
-for(const child of [...advancedColor.children])if(child.tagName!=='SUMMARY')colorPopover.append(child);advancedColor.remove();
-function closeColorPopover(){colorPopover.hidden=true;advancedColorButton.setAttribute('aria-expanded','false')}
-advancedColorButton.onclick=()=>{const opening=colorPopover.hidden;closeColorPopover();if(opening){colorPopover.hidden=false;const r=advancedColorButton.getBoundingClientRect();colorPopover.style.left=Math.max(8,Math.min(window.innerWidth-colorPopover.offsetWidth-8,r.right-colorPopover.offsetWidth))+'px';colorPopover.style.top=Math.max(8,Math.min(window.innerHeight-colorPopover.offsetHeight-8,r.bottom+6))+'px';advancedColorButton.setAttribute('aria-expanded','true')}};
-$('closeAdvancedColor').onclick=closeColorPopover;document.addEventListener('pointerdown',e=>{if(!colorPopover.contains(e.target)&&!advancedColorButton.contains(e.target))closeColorPopover()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!colorPopover.hidden){e.stopPropagation();closeColorPopover();advancedColorButton.focus()}},true);window.addEventListener('resize',closeColorPopover);
+// Hue/Saturation used to live in this <details>, popped out into a
+// floating "Advanced color" popover for a nicer disclosure than a plain
+// <details> twisty. color-ranges.js (loaded later) now un-collapses them a
+// second time, straight into the always-visible selective-color controls --
+// so the popover and its trigger button are dead weight: nothing is left
+// worth hiding behind a click-to-open panel. advancedColor itself still
+// needs emptying out (its children move on, unmoved ones would otherwise
+// vanish with it) and resetColor still needs a home; color-ranges.js claims
+// both directly instead of through this now-pointless middleman.
+for(const child of [...advancedColor.children])if(child.tagName!=='SUMMARY')document.body.append(child);advancedColor.remove();
 // Auto correction and committing manual adjustments are separate actions.
 // Keep a single text Apply Color action; distinguish Auto with a compact magic-wand icon.
 $('autoColor').innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 12-12 3 3L7 23zM4 3v6M1 6h6M17 1v4M15 3h4M21 16v6M18 19h6"/></svg>';$('autoColor').classList.add('compactIcon');$('autoColor').title='Auto Color · gentle white balance and levels';$('autoColor').setAttribute('aria-label','Auto Color');
-colorPopover.append($('resetColor'));
 
 // Live settings feedback across the native Settings and Preview windows.
 const previewSettingsChannel=typeof BroadcastChannel==='function'?new BroadcastChannel('clarette-preview-settings'):null;

@@ -51,10 +51,14 @@
   --dv-active-sash-transition-duration: 0.12s;
   --dv-active-sash-transition-delay: 0s;
 
-  /* Docking targets + the translucent placement preview. */
-  --dv-drag-over-background-color: rgba(179, 154, 244, 0.16);
+  /* Docking targets + the placement preview -- Dockview's own big
+   * edge/quadrant highlight box (.dv-drop-target-anchor / -selection), the
+   * same mechanism VS Code uses to show where a dragged panel will land.
+   * A faint 0.16 tint read as barely-there against this dark theme; bumped
+   * bold enough that the target zone is obvious at a glance mid-drag. */
+  --dv-drag-over-background-color: rgba(179, 154, 244, 0.34);
   --dv-drag-over-border-color: var(--dv-color-clarette-accent);
-  --dv-drag-over-border: 2px solid var(--dv-color-clarette-accent);
+  --dv-drag-over-border: 3px solid var(--dv-color-clarette-accent);
   --dv-edge-dock-indicator-color: rgba(179, 154, 244, 0.9);
   --dv-smart-guides-color: var(--dv-color-clarette-accent);
   --dv-smart-guides-preview-color: rgba(179, 154, 244, 0.28);
@@ -131,7 +135,12 @@
  * button, Preview's display-mode toggles), so the row shrinks to fit only
  * those instead of the fixed height sized for a now-absent heading. */
 .batch .batchbar { height: auto; min-height: 0; padding: 8px 18px; }
-.editor .editorHead { height: auto; min-height: 0; padding: 8px 18px; }
+.editor .editorHead { height: auto; min-height: 0; padding: 8px 18px; flex-wrap: wrap; }
+/* Wraps onto its own row after whatever controls are in the header (there may
+ * be none visible), landing at the bottom of the header and right above the
+ * vertical toolbar/canvas that follows -- exactly where the dimensions text
+ * used to read before the heading itself moved up into the tab. */
+.editor .editorHead #canvasSizeBadge { flex: 1 0 100%; order: 99; margin-top: 2px; }
 /* Drag Panels off (Settings > Workspace) locks the workspace -- panels stay
  * usable but can't be dragged or moved, so these disappear along with that
  * ability instead of sitting there doing nothing. */
@@ -223,6 +232,15 @@
 .dockPanelBody > section:only-child > .sectionTitle:has(> button, > input, > select) > span:first-child {
   display: none;
 }
+/* With that label gone, .sectionTitle's own `justify-content:space-between`
+ * (meant to push a lone title left and a lone action right) instead spreads
+ * Color's 4 remaining buttons evenly across the *entire* panel width -- the
+ * exact opposite of "grouped together" once there's no label to be
+ * between. Group them at the end instead, wherever there's more than one. */
+.dockPanelBody > section:only-child > .sectionTitle:has(> button, > input, > select) {
+  justify-content: flex-end;
+  gap: 6px;
+}
 
 .layout.layoutLocked .dv-sash { pointer-events: none; opacity: 0.35; }
 
@@ -261,12 +279,30 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
 }
 .batch .portraitRow > .queueItem { flex: 1; min-width: 0; }
 .batch .portraitTrash {
   position: static;
   flex: none;
   margin: 0 4px 0 0;
+}
+/* The lilac ".active" selection highlight is a generic, !important-ed rule
+ * shared by several unrelated buttons across the app (curve tabs, before/
+ * cutoutToggle, ...) -- reused here rather than duplicated, but it paints
+ * onto .queueItem itself, which stops at the trash button's left edge since
+ * that button is .queueItem's flex *sibling*, not something nestable inside
+ * it (both are <button>s already). Moving the highlight onto their shared
+ * parent .portraitRow -- and suppressing it on .queueItem so it doesn't
+ * double up -- draws one box that encloses both, trash included. */
+.batch .portraitRow:has(> .queueItem.active) {
+  background: #52446f66;
+  border-color: #bca1ff;
+}
+.batch .portraitRow > .queueItem.active {
+  background: none !important;
+  border-color: transparent !important;
 }
 
 /* --- Responsive Portraits: horizontal filmstrip vs vertical list ---------- */
@@ -290,26 +326,22 @@
 }
 .batch .queueItem strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 
-/* Wide-and-short: horizontal scrolling row of compact cards (mockup 3).
- * Gated on aspect ratio (not width alone) so a panel that's merely wide but
- * still tall -- e.g. spanning a full-height column -- stays a vertical list;
- * only a panel that's actually short-and-wide switches. The single breakpoint
- * (no separate enter/exit thresholds) is deliberate: a container query only
- * re-evaluates on an actual box-size change, so there's no repeated-callback
- * jitter to dampen the way a JS ResizeObserver would need. */
+/* Wide-and-short (mockup 3): the same horizontal card as the vertical list
+ * (image left, text/status middle, trash on the right -- never redrawn into
+ * a separate top-image/bottom-text mini-card, which was cramming that same
+ * content into a much narrower box and forcing the trash button to overlap
+ * the wrapped dimensions/status text below it) just laid out several per
+ * row instead of one-per-row, so a short panel still uses its width
+ * instead of scrolling a single column. Gated on aspect ratio (not width
+ * alone) so a panel that's merely wide but still tall -- e.g. spanning a
+ * full-height column -- stays a single column; only a panel that's
+ * actually short-and-wide switches. The single breakpoint (no separate
+ * enter/exit thresholds) is deliberate: a container query only re-evaluates
+ * on an actual box-size change, so there's no repeated-callback jitter to
+ * dampen the way a JS ResizeObserver would need. */
 @container portraits (min-aspect-ratio: 3/2) {
-  .batch .queue { display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; gap: 14px; flex: 1; padding: 4px 6px 10px; }
-  .batch .portraitRow { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; }
-  .batch .queueItem { flex-direction: column; align-items: center; width: 108px; min-height: 0; gap: 8px; padding: 10px !important; text-align: center; border-color: var(--line); border-radius: 10px; }
-  .batch .queueItem img { width: 80px; height: 80px; object-fit: cover; border: 1px solid #4a5a68; border-radius: 6px; }
-  .batch .qText { flex: none; width: 100%; align-self: auto; padding-right: 0 !important; }
-  .batch .queueItem strong { font-size: 11px; }
-  .batch .originalDimensions,
-  .batch .qText > span { display: none; }
-  /* Its own row below the card, not overlaid on a corner, so it has room to
-   * be a normal tappable button instead of a cramped 16px hotspot pinned
-   * over the thumbnail/name. */
-  .batch .portraitTrash { position: static; margin-top: 2px; width: 22px; min-width: 22px; height: 22px; min-height: 22px; }
+  .batch .queue { display: flex; flex-direction: row; flex-wrap: wrap; align-content: flex-start; gap: 10px; padding: 4px 6px 10px; }
+  .batch .portraitRow { flex: 0 1 260px; }
 }
 /* Narrow-and-tall: vertical scrolling list (mockup 4) -- the unconditional
  * default above already does this; .queue's own overflow-y:auto (style.css)

@@ -40,6 +40,10 @@ el('brushMinus').setAttribute('aria-label','Decrease brush size');el('brushPlus'
 for(const [selector,title] of [['.advancedColor','Advanced color'],['.detailSection>details','Enhancement engine and options'],['.maskSection>details','Mask model and edge refinement']]){const section=document.querySelector(selector);section.querySelector('summary').textContent=title;section.classList.add('settingsAdvanced');el('settingsDialog').append(section)}
 
 el('viewZoom').querySelector('option[value="fill"]').remove();el('viewZoom').querySelector('option[value="fit"]').textContent='Fit output';el('viewZoom').value='fit';
-const previewLabel=document.querySelector('.previewHeading');previewLabel.insertAdjacentHTML('beforeend','<small id="canvasSizeBadge"></small>');
+// canvasSizeBadge lives in .editorHead itself (not nested inside .previewHeading):
+// the heading text moves into the tab (see dockview-workspace.js's SOLO_HEADING),
+// but the pixel-dimensions line stays in the panel body, wrapping onto its own
+// row at the bottom of the header, right above the vertical toolbar/canvas.
+document.querySelector('.editorHead').insertAdjacentHTML('beforeend','<small id="canvasSizeBadge"></small>');
 
 const historyTools=document.createElement('div');historyTools.className='historyTools';const redoButton=document.createElement('button');redoButton.id='redo';redoButton.setAttribute('data-mutation','');redoButton.innerHTML=phosphor['arrow-counter-clockwise']+'<span>Redo</span>';redoButton.title='Redo (⌘Y or ⌘⇧Z)';redoButton.setAttribute('aria-label','Redo');el('undo').innerHTML=phosphor['arrow-counter-clockwise']+'<span>Undo</span>';el('undo').title='Undo (⌘Z)';historyTools.append(el('undo'),redoButton);document.querySelector('.editorHead').after(historyTools);
