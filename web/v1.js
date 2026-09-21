@@ -2,7 +2,7 @@ async function openNative(kind,payload={}){await flush();const r=await api('/api
 const toolbar=document.querySelector('.topbar nav');$('help').hidden=true;$('apiKeys').hidden=true;
 const exportButton=makeButton('exportButton',(phosphor['export']||phosphor['upload-simple'])+'<span>Export</span>','Export Finals');toolbar.prepend(exportButton);exportButton.onclick=()=>openNative('export');
 $('settings').onclick=()=>openNative('settings');$('newBatch').onclick=()=>openNative('new-batch');$('emptyImport').onclick=()=>chooseImport(true);$('saveFinals').onclick=()=>openNative('export');
-const externalButtons={photoshop:$('photoshop')};for(const name of ['affinity','photos']){const button=makeButton('external-'+name,(name==='photos'?'<img src="photos-icon.png" alt="" class="appIcon">':phosphor.images)+'<span>'+({affinity:'Affinity',photos:'Photos'}[name])+'</span>',name);toolbar.insertBefore(button,$('settings'));externalButtons[name]=button}
+const externalButtons={photoshop:$('photoshop')};const externalIcons={affinity:'<img src="assets/affinity.svg" alt="" class="appIcon">',photos:'<img src="photos-icon.png" alt="" class="appIcon">'};for(const name of ['affinity','photos']){const button=makeButton('external-'+name,externalIcons[name]+'<span>'+({affinity:'Affinity',photos:'Photos'}[name])+'</span>',name);toolbar.insertBefore(button,$('settings'));externalButtons[name]=button}
 for(const [name,b] of Object.entries(externalButtons))b.onclick=guarded(async()=>{await flush();await api('/api/open',context({service:name}))});
 const previewColor=makeButton('previewColor',phosphor.eye,'Preview Color Changes');previewColor.className='previewToggle';$('autoColor').before(previewColor);previewColor.onclick=guarded(async()=>{await api('/api/settings',{preview_color:app.settings.preview_color===false});await refresh();updatePreview()});
 $('neutralColor').title='Reset Color';$('neutralColor').onclick=guarded(async()=>{await flush();await api('/api/color-reset',context());await refresh(true)});
@@ -72,53 +72,10 @@ $('mainCanvas').onpointerdown=e=>{
 $('mainCanvas').onpointermove=e=>{if(drag?.inspect)return moveV1(e);if(drag?.rotate){current.transform.rotation=drag.rotation+(e.clientX-drag.x)*.3;draw();return}if(brush==='lasso'&&polygonDrag!==null){polygon.points[polygonDrag]=sourcePoint(e).map(v=>Math.max(0,Math.min(1,v)));draw();return}if(brush==='lasso')return;return moveV1(e)};
 $('mainCanvas').onpointerup=e=>{if(drag?.inspect)return upV1(e);if(drag?.rotate){drag=null;schedule();return}if(brush==='lasso'){polygonDrag=null;return}return upV1(e)};
 const drawV1=draw;draw=function(){drawV1();if(!polygon||!current)return;const c=$('mainCanvas'),ctx=c.getContext('2d'),g=geometry(c),t=current.transform,iw=current.width*t.scale*g.k,ih=current.height*t.scale*g.k,x=g.ox+t.x*g.k,y=g.oy+t.y*g.k;ctx.save();ctx.translate(x+iw/2,y+ih/2);ctx.rotate((t.rotation||0)*Math.PI/180);ctx.translate(-iw/2,-ih/2);ctx.strokeStyle='#d9c8ff';ctx.fillStyle='#b69af533';ctx.lineWidth=1.5;ctx.beginPath();polygon.points.forEach(([px,py],i)=>i?ctx.lineTo(px*iw,py*ih):ctx.moveTo(px*iw,py*ih));if(polygon.closed){ctx.closePath();ctx.fill()}ctx.stroke();polygon.points.forEach(([px,py],i)=>{ctx.fillStyle=i===polygon.selected?'#ffffff':'#b69af5';ctx.fillRect(px*iw-4,py*ih-4,8,8)});ctx.restore()};
-// Workspace layout replaces the old fixed-column separators, retaining the panels themselves.
-separators.forEach(el=>el.remove());layoutPanels=()=>{};
-const panels={portraits:document.querySelector('.batch'),preview:document.querySelector('.editor'),adjustments:document.querySelector('.inspector')};
-for(const [id,panel] of Object.entries(panels)){panel.dataset.panel=id;const handle=document.createElement('div');handle.className='panelDrag';handle.setAttribute('aria-label','Drag to move '+id);handle.draggable=true;panel.prepend(handle);handle.ondragstart=e=>{if(app.workspaces[app.workspace].locked){e.preventDefault();message('Unlock the workspace (Workspace menu) to rearrange panels',true);return}e.dataTransfer.setData('text/clarette-panel',id)};panel.ondragover=e=>{if(!app.workspaces[app.workspace].locked)e.preventDefault()};panel.ondrop=guarded(async e=>{e.preventDefault();const id=e.dataTransfer.getData('text/clarette-panel');if(!panels[id])return;const ws=clone(app.workspaces[app.workspace]);if(ws.locked)return;const from=ws.order.indexOf(id),to=ws.order.indexOf(panel.dataset.panel);ws.order.splice(from,1);ws.order.splice(to,0,id);await api('/api/workspace',{workspace:ws});workspaceSignature='';await refresh()})}
-// In Portrait Mode's nested layout, the Portraits and Adjustments panels share one
-// resizable column. Past a width threshold each reflows for the extra room: Portraits
-// becomes a horizontal filmstrip, Adjustments spreads its sections into outlined columns.
-const nestedResize=new ResizeObserver(entries=>{const nested=app?.workspaces?.[app.workspace]?.orientation==='nested';for(const entry of entries){if(entry.target===panels.portraits)panels.portraits.classList.toggle('filmstrip',nested&&entry.contentRect.width>440);if(entry.target===panels.adjustments)panels.adjustments.classList.toggle('wide',nested&&entry.contentRect.width>680)}});
-nestedResize.observe(panels.portraits);nestedResize.observe(panels.adjustments);
-// One set of limits for pointer, keyboard and restored workspace sizes.
-function panelMinimum(id,vertical){return (vertical?{portraits:220,preview:480,adjustments:320}:{portraits:250,preview:400,adjustments:330})[id]}
-function panelMaximum(id,vertical){return vertical?Infinity:({portraits:400,preview:Infinity,adjustments:520})[id]}
-function resizePanelPair(p,neighbor,vertical,first,total){const minimum=panelMinimum(p.dataset.panel,vertical),otherMinimum=panelMinimum(neighbor.dataset.panel,vertical);total=Math.max(total,minimum+otherMinimum);const low=Math.max(minimum,total-panelMaximum(neighbor.dataset.panel,vertical)),high=Math.min(total-otherMinimum,panelMaximum(p.dataset.panel,vertical));const value=Math.max(low,Math.min(high,first));p.style.flex=`0 0 ${value}px`;neighbor.style.flex=`0 0 ${total-value}px`;if(vertical){p.style.height=value+'px';neighbor.style.height=(total-value)+'px'}return value}
-let workspaceSignature='';function syncWorkspace(){if(!app?.workspaces)return;const ws=app.workspaces[app.workspace],signature=JSON.stringify([app.workspace,ws]);if(signature===workspaceSignature)return;workspaceSignature=signature;
- const nested=ws.orientation==='nested';
- panelLayout.classList.toggle('vertical',ws.orientation==='vertical');panelLayout.classList.toggle('nested',nested);panelLayout.classList.toggle('layoutLocked',ws.locked);panelLayout.querySelectorAll('.workspaceDivider,.nestedDivider').forEach(el=>el.remove());
- for(const id of ws.order)panels[id].hidden=ws.visible?.[id]===false;const visibleOrder=ws.order.filter(id=>ws.visible?.[id]!==false);
- // Portrait Mode's nested arrangement: Preview spans the full height on one side,
- // Portraits stacks above Adjustments on the other, sharing one resizable column
- // (--nestedCol). Dragging it wider crosses thresholds (see the ResizeObserver
- // above) that switch Portraits to a filmstrip and Adjustments to outlined columns.
- if(nested){
-  for(const id of visibleOrder){panelLayout.append(panels[id]);panels[id].style.flex='';panels[id].style.width='';panels[id].style.height=''}
-  const colIndex=ws.order.indexOf('portraits');
-  panelLayout.style.setProperty('--nestedCol',Math.max(300,Math.min(900,ws.sizes[colIndex]))+'px');
-  if(!ws.locked){
-   const div=document.createElement('div');div.className='nestedDivider';div.tabIndex=0;div.setAttribute('role','separator');div.setAttribute('aria-orientation','vertical');div.setAttribute('aria-label','Resize Portraits and Adjustments column');panelLayout.append(div);
-   let start=null;
-   div.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();start={x:e.clientX,width:panels.portraits.offsetWidth};div.classList.add('dragging');div.setPointerCapture(e.pointerId)};
-   div.onpointermove=e=>{if(!start)return;panelLayout.style.setProperty('--nestedCol',Math.max(300,Math.min(900,start.width-(e.clientX-start.x)))+'px')};
-   div.onpointerup=guarded(async()=>{if(!start)return;start=null;div.classList.remove('dragging');const width=Math.round(panels.portraits.offsetWidth);ws.sizes=ws.order.map((id,i)=>id==='portraits'||id==='adjustments'?width:ws.sizes[i]);await api('/api/workspace',{workspace:ws});await refresh()});
-   div.onpointercancel=div.onpointerup;
-   div.onkeydown=guarded(async e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();const width=Math.max(300,Math.min(900,panels.portraits.offsetWidth+(e.key==='ArrowLeft'?16:-16)));panelLayout.style.setProperty('--nestedCol',width+'px');ws.sizes=ws.order.map((id,i)=>id==='portraits'||id==='adjustments'?width:ws.sizes[i]);await api('/api/workspace',{workspace:ws});await refresh()});
-  }
-  draw();return;
- }
- visibleOrder.forEach((id,visibleIndex)=>{const index=ws.order.indexOf(id),p=panels[id];panelLayout.append(p);p.style.flex=`${id==='preview'?'1 1':'0 0'} ${Math.min(panelMaximum(id,ws.orientation==='vertical'),Math.max(panelMinimum(id,ws.orientation==='vertical'),ws.sizes[index]))}px`;p.style.width=ws.orientation==='vertical'?'100%':'';p.style.height=ws.orientation==='vertical'?ws.sizes[index]+'px':'';
- if(visibleIndex===visibleOrder.length-1||ws.locked)return;const div=document.createElement('div');div.className='workspaceDivider';div.style.flexBasis='3px';div.tabIndex=0;div.setAttribute('role','separator');div.setAttribute('aria-label','Resize '+id);panelLayout.append(div);let start=null;
- div.onpointerdown=e=>{if(ws.locked)return;const neighbor=panels[visibleOrder[visibleIndex+1]];if(e.button!==0)return;e.preventDefault();start={x:e.clientX,y:e.clientY,size:ws.orientation==='vertical'?p.offsetHeight:p.offsetWidth,neighbor,otherSize:ws.orientation==='vertical'?neighbor.offsetHeight:neighbor.offsetWidth};div.setPointerCapture(e.pointerId)};
- div.onpointermove=e=>{if(!start)return;resizePanelPair(p,start.neighbor,ws.orientation==='vertical',start.size+(ws.orientation==='vertical'?e.clientY-start.y:e.clientX-start.x),start.size+start.otherSize);draw()};
- div.onpointerup=guarded(async()=>{if(!start)return;start=null;ws.sizes=ws.order.map(key=>Math.round(ws.orientation==='vertical'?panels[key].offsetHeight||ws.sizes[ws.order.indexOf(key)]:panels[key].offsetWidth||ws.sizes[ws.order.indexOf(key)]));await api('/api/workspace',{workspace:ws});await refresh()});
- div.onpointercancel=div.onpointerup;
- div.onkeydown=guarded(async e=>{const vertical=ws.orientation==='vertical';if(ws.locked||!(vertical?['ArrowUp','ArrowDown']:['ArrowLeft','ArrowRight']).includes(e.key))return;e.preventDefault();const neighbor=panels[visibleOrder[visibleIndex+1]],size=vertical?p.offsetHeight:p.offsetWidth,other=vertical?neighbor.offsetHeight:neighbor.offsetWidth;resizePanelPair(p,neighbor,vertical,size+(['ArrowLeft','ArrowUp'].includes(e.key)?-16:16),size+other);ws.sizes=ws.order.map(key=>Math.round((vertical?panels[key].offsetHeight:panels[key].offsetWidth)||ws.sizes[ws.order.indexOf(key)]));await api('/api/workspace',{workspace:ws});await refresh()});
- div.setAttribute('aria-orientation',ws.orientation==='vertical'?'horizontal':'vertical');
-
- });draw();}
-const oldRenderV1=renderOutput;renderOutput=function(){oldRenderV1();if(!app)return;syncWorkspace();$('batchCount').replaceChildren('Portraits',Object.assign(document.createElement('span'),{className:'batchMeta',textContent:' · '+(batch?.files.length||0)+(batch?' · '+batch.name:'')}));$('batchCount').title=batch?.name||'No active batch';for(const [name,b] of Object.entries(externalButtons))b.hidden=!(app.settings.toolbar_apps.includes(name)&&app.external_apps[name]);previewColor.classList.toggle('active',app.settings.preview_color!==false);backgroundToggle.classList.toggle('active',app.settings.solid_preview);backgroundToggle.querySelector('svg').style.fill=app.settings.preview_background||'#00a84f';syncEnhanceProviders();passportNote.hidden=batch?.canvas.preset_id!=='passport';$('saveCurrentPreset').disabled=!batch||Object.values(app.presets).some(p=>p.width===batch.canvas.width&&p.height===batch.canvas.height&&p.dpi===batch.canvas.dpi);$('matchSource').disabled=!current};
+// The panel host/drag/resize/responsive-reflow system now lives in Dockview
+// (see dockview-workspace.js, loaded after this file) -- it takes over
+// .batch/.editor and the individual Adjustments sections directly.
+const oldRenderV1=renderOutput;renderOutput=function(){oldRenderV1();if(!app)return;$('batchCount').replaceChildren('Portraits',Object.assign(document.createElement('span'),{className:'batchMeta',textContent:' · '+(batch?.files.length||0)+(batch?' · '+batch.name:'')}));$('batchCount').title=batch?.name||'No active batch';for(const [name,b] of Object.entries(externalButtons))b.hidden=!(app.settings.toolbar_apps.includes(name)&&app.external_apps[name]);previewColor.classList.toggle('active',app.settings.preview_color!==false);backgroundToggle.classList.toggle('active',app.settings.solid_preview);backgroundToggle.querySelector('svg').style.fill=app.settings.preview_background||'#00a84f';syncEnhanceProviders();passportNote.hidden=batch?.canvas.preset_id!=='passport';$('saveCurrentPreset').disabled=!batch||Object.values(app.presets).some(p=>p.width===batch.canvas.width&&p.height===batch.canvas.height&&p.dpi===batch.canvas.dpi);$('matchSource').disabled=!current};
 const oldLoadV1=loadSelected;loadSelected=async function(){cancelPolygon();await oldLoadV1();renderOutput()};
 for(const [id,button] of Object.entries({'import':'importBtn','clear':'clearPortraits','working':'working','final':'openFinal','undo':'undo','redo':'redo','auto-fit':'autoFit','auto-color':'autoColor','enhance':'enhance','compare':'before','preview-color':'previewColor','transparency':'previewBackground','fit':'homeView','lock':'lockPosition','crop':'crop'}))registerCommand(id,()=>$(button).click());
 for(const kind of ['settings','shortcuts','help','new-batch','rename-batch','export','updates'])registerCommand(kind,()=>openNative(kind));
@@ -128,11 +85,8 @@ registerCommand('close-batch',async()=>{if(!batch)return;if(!confirm('Close this
 registerCommand('import-zip',()=>{$('fileInput').accept='.zip';chooseImport(true)});
 registerCommand('batch-folder',async()=>{const r=await api('/api/choose-path',{kind:'folder'});if(r.path){await api('/api/batch-folder',{path:r.path});await refresh()}});
 for(const mode of ['rgb','cmyk'])registerCommand(mode,async()=>{await api('/api/color-mode',{mode:mode.toUpperCase()});await refresh()});
-for(const id of ['landscape','portrait'])registerCommand(id,async()=>{await api('/api/workspace',{id,operation:'select'});await refresh()});
-for(const op of ['new','rename'])registerCommand('workspace-'+op,()=>openNative('workspace',{operation:op}));
-registerCommand('workspace-delete',async()=>{if(confirm('Delete this custom workspace?')){await api('/api/workspace',{operation:'delete'});await refresh()}});
-registerCommand('workspace-lock',async()=>{await api('/api/workspace',{operation:'lock',locked:!app.workspaces[app.workspace].locked});await refresh()});
-registerCommand('workspace-reset',async()=>{if(confirm('Reset the current workspace layout?')){await api('/api/workspace',{operation:'reset'});await refresh()}});
+// Workspace preset/lifecycle commands (workspace-default, -tools2x2, -new, -lock, etc.)
+// are registered by dockview-workspace.js, next to the layout code they drive.
 registerCommand('fullscreen',()=>api('/api/fullscreen'));registerCommand('feedback',()=>api('/api/feedback'));
 for(const [id,angle] of [['rotate-left',-90],['rotate-right',90]])registerCommand(id,async()=>{if(!current||current.position_locked)return;await flush();await api('/api/rotate',context({angle:((current.transform.rotation||0)+angle)%360}));await refresh(true)});
 
@@ -186,8 +140,6 @@ const renderWithRemovedPortraits=renderOutput;renderOutput=function(){renderWith
 // Keep the editor free of duplicate advanced disclosure rows.
 detailInfo.hidden=true;advancedPosition.hidden=true;
 
-// Keep the adjustment sequence consistent with the workflow.
-for(const node of [outputSection,framing,colorSection,document.querySelector('.detailSection'),maskSectionRef])panels.adjustments.append(node);
 // Advanced color lives in an anchored floating panel, without duplicate actions.
 const advancedColorButton=makeButton('advancedColorButton',phosphor['sliders-horizontal'],'Advanced color');advancedColorButton.className='compactIcon filledIcon';advancedColorButton.setAttribute('aria-expanded','false');$('previewColor').before(advancedColorButton);
 const colorPopover=document.createElement('div');colorPopover.id='colorPopover';colorPopover.hidden=true;colorPopover.setAttribute('role','dialog');colorPopover.setAttribute('aria-label','Advanced color');colorPopover.innerHTML='<div class="colorPopoverHead"><span>Color adjustments</span><button type="button" id="closeAdvancedColor" aria-label="Close color adjustments">×</button></div>';document.body.append(colorPopover);
@@ -199,13 +151,6 @@ $('closeAdvancedColor').onclick=closeColorPopover;document.addEventListener('poi
 // Keep a single text Apply Color action; distinguish Auto with a compact magic-wand icon.
 $('autoColor').innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 12-12 3 3L7 23zM4 3v6M1 6h6M17 1v4M15 3h4M21 16v6M18 19h6"/></svg>';$('autoColor').classList.add('compactIcon');$('autoColor').title='Auto Color · gentle white balance and levels';$('autoColor').setAttribute('aria-label','Auto Color');
 colorPopover.append($('resetColor'));
-
-const renderPanelNames=renderOutput;renderOutput=function(){renderPanelNames();
- // Dragging reorders panels within a single row/column; Portrait Mode's nested
- // layout (see syncWorkspace) is fixed by position instead, so dragging there
- // wouldn't do anything yet -- hide the handles rather than ship a dead control.
- const nested=app?.workspaces?.[app.workspace]?.orientation==='nested';
- document.querySelectorAll('.panelDrag').forEach(el=>{el.hidden=nested||app?.settings.show_panel_names===false})};
 
 // Live settings feedback across the native Settings and Preview windows.
 const previewSettingsChannel=typeof BroadcastChannel==='function'?new BroadcastChannel('clarette-preview-settings'):null;

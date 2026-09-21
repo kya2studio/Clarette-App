@@ -1,14 +1,13 @@
-/* Clarette 1.0 workspace: retain the existing dark/lilac identity. */
-.layout{display:flex!important;gap:10px!important;height:calc(100vh - 104px)!important;padding:10px!important;overflow:auto;grid-template-rows:none!important}
-.layout.vertical{flex-direction:column}.layout>.panel{grid-area:auto!important;min-width:190px;min-height:180px;margin:0!important}.layout>.editor{flex:1;min-width:330px}.layout>.inspector{overflow:auto}.layout>.batch{overflow:hidden}
-.layout>.delivery,.panelSeparator{display:none!important}.workspaceDivider{flex:0 0 5px;cursor:col-resize;border-radius:4px;background:#8e83a14a;min-width:5px}.vertical>.workspaceDivider{cursor:row-resize;min-height:5px}.workspaceDivider:hover{background:#b29af4}
-.panelDrag{font-size:10px;letter-spacing:.07em;color:#bdb1ce;cursor:grab;user-select:none;padding:4px 8px;flex-shrink:0}.panelDrag:before{content:'⠿ ';color:#b59aed}.layoutLocked .panelDrag{cursor:default}
+/* Clarette 1.0 workspace: retain the existing dark/lilac identity.
+   The panel host/divider/tab mechanics themselves now live in Dockview
+   (see dockview-theme.css, loaded after this file) -- .layout is handed
+   to createDockview() as-is and Dockview owns its children from there. */
+.layout{display:flex!important;height:calc(100vh - 104px)!important;padding:0!important;overflow:hidden}
+.layout>.delivery{display:none!important}
 .batchbar{min-width:0}.batchbar b{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:100%}.topbar nav{gap:14px}.topbar nav button{min-width:56px}.topbar nav button svg{width:25px;height:25px}.topbar nav button span{font-size:12px}
 .outputPresetActions{display:flex;gap:5px;margin-top:8px}.outputPresetActions button{flex:1;font-size:11px}.qualityHelp{font-size:11px}.previewToggle{width:32px;min-width:32px;padding:5px}.previewToggle svg{width:20px;height:20px}
 #polygonActions{display:flex;gap:7px;align-items:center;padding:7px;font-size:11px}#polygonActions[hidden]{display:none}#polygonActions button{padding:5px 10px}#polygonActions span{flex:1}
 #settingsDialog{display:none!important}.outputSection .passportNote{font-size:11px;color:#c3b7d7;line-height:1.5}.maskToolOptions{flex-wrap:wrap}.brushbar{flex-wrap:wrap;gap:8px}.toolRail button{flex-shrink:0}
-
-.layout>.panel[hidden]{display:none!important}.vertical>.editor{flex-shrink:0!important;min-height:480px}.vertical>.batch{min-height:220px}.vertical>.inspector{min-height:320px}
 
 /* Compact, centered actions alongside the output preset. */
 .outputPresetActions{display:flex;align-items:center;gap:6px;margin:0 0 8px}
@@ -94,26 +93,20 @@ select{color-scheme:dark}select option,select optgroup{color:#f3eff9;background:
 /* Toolbar labels and glyphs share a bounded, centered button. */
 .topbar nav{gap:6px;align-items:center}.topbar nav button,.topbar nav .iconButton{box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:0 0 auto;width:64px;min-width:64px;height:56px;min-height:56px;padding:5px 3px;gap:4px;border:1px solid #45404f;border-radius:8px;background:#24262e;overflow:hidden;line-height:12px}.topbar nav button span{display:block;max-width:100%;font-size:10px;line-height:12px;white-space:nowrap}.topbar nav button svg,.topbar nav button .providerIcon,.topbar nav button .providerIcon.photoshop{width:22px;height:22px;flex:0 0 22px;object-fit:contain}.topbar nav button:hover{border-color:#b69af5;background:#34303f}
 
-/* Preserve readable controls at divider limits and after restoring a workspace. */
-.layout:not(.vertical)>.batch{min-width:220px;flex-shrink:1!important}
-.layout:not(.vertical)>.editor{min-width:400px}
-.layout:not(.vertical)>.inspector{min-width:330px;flex-shrink:1!important}
-.layout.vertical>.panel{min-width:330px}
+/* Preserve readable controls at each panel's practical minimum size (the
+   matching Dockview minimumWidth/minimumHeight constraints are set per panel
+   in dockview-workspace.js; these are the CSS-side floors for their content). */
 .batchbar{min-width:0}.batchbar strong,#batchCount{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .inspector select{min-width:0;max-width:100%}.inspector .qualityChoice{min-width:0}
 .editorHead{min-width:0;flex-wrap:wrap}.previewHeaderActions{flex-shrink:0}
-.workspaceDivider{touch-action:none;flex-shrink:0}
 
-.layout:not(.vertical)>.batch{max-width:400px}.layout:not(.vertical)>.inspector{max-width:520px}
 /* Compact workspace and movable tools. */
-.layout{gap:3px!important;padding:6px!important}
-.workspaceDivider{min-width:3px!important;flex-basis:3px!important;border-radius:2px;background:#8e83a133}.vertical>.workspaceDivider{min-height:3px}
-.layout:not(.vertical)>.batch{min-width:250px}.layout>.editor{position:relative;padding:6px!important}.editorHead{padding:3px 5px!important;margin:0!important}.previews{gap:5px!important;padding:3px!important}.previewPane{padding:0!important}.inspector{padding:6px 10px!important}.inspector>section{padding:9px 0!important}.batchbar{padding:8px!important}.queue{padding:4px 7px!important}.batchFoot{padding:7px!important;gap:5px!important}.panelDrag{padding:3px 7px}
+.editor{position:relative;padding:6px!important}.editorHead{padding:3px 5px!important;margin:0!important}.previews{gap:5px!important;padding:3px!important}.previewPane{padding:0!important}.inspector{padding:6px 10px!important}.inspector>section{padding:9px 0!important}.batchbar{padding:8px!important}.queue{padding:4px 7px!important}.batchFoot{padding:7px!important;gap:5px!important}
 .portraitRow .qText{padding-right:30px!important}.queueItem{gap:9px!important;padding:8px!important}.queueItem img{width:62px!important;height:72px!important;object-fit:cover}.queueItem em{white-space:nowrap;font-size:12px!important}.portraitTrash{right:7px;bottom:9px;width:24px;min-width:24px;height:24px;min-height:24px}
 .canvasTools{width:34px!important;min-width:34px!important;padding:2px!important;gap:3px!important;align-self:stretch;display:flex;flex-direction:column}.canvasTools #brushTools{gap:3px!important}.canvasTools button{width:29px!important;min-width:29px!important;height:30px!important;min-height:30px!important;padding:4px!important;display:flex;align-items:center;justify-content:center}.canvasTools svg{width:20px!important;height:20px!important}.railHistory{margin-top:auto;padding-top:7px;display:flex;flex-direction:column;gap:3px;border-top:1px solid #ffffff19}.editor .canvasTools #undo,.editor .canvasTools #redo{display:flex!important;margin:0!important}.editor .viewbar:empty{display:none}
 #toast{position:absolute!important;top:48px!important;bottom:auto!important;left:50%!important;transform:translateX(-50%)!important;width:max-content;max-width:calc(100% - 36px);padding:9px 14px;background:rgba(44,38,56,.82)!important;border:1px solid #b69af588;border-radius:9px;backdrop-filter:blur(10px);z-index:1500;pointer-events:none;text-align:center}
 button:focus:not(:focus-visible){outline:none!important;box-shadow:none!important}.maskSection button:focus:not(:focus-visible){border-color:#45404f!important}
-.maskSection .sectionTitle{display:flex;align-items:center;justify-content:space-between}.maskSection #maskEnabled{width:15px;height:15px;margin:0;accent-color:#b69af5}.maskSection.maskDisabled>:not(.sectionTitle){opacity:.4}.maskSection.maskDisabled button:disabled{opacity:1}
+.maskSection .sectionTitle{display:flex;align-items:center;justify-content:space-between}.maskSection #maskEnabled{width:15px;height:15px;margin:0 0 0 auto;accent-color:#b69af5}.maskSection.maskDisabled>:not(.sectionTitle){opacity:.4}.maskSection.maskDisabled button:disabled{opacity:1}
 #viewPanel{width:340px!important;padding:14px!important}#viewPanel .fieldGrid{gap:8px}#viewPanel input{min-width:0;width:100%;height:29px;min-height:29px;padding:4px 7px}#viewPanel hr{margin:12px 0}#viewPanel h3{margin:0 0 9px;font-size:12px}#viewPanel #fitInspection{margin-top:10px}#viewPanel #placementNote{display:none!important}
 #edgesDialog{width:340px!important;padding:14px!important}#edgesDialog p{display:none!important}#edgesDialog>label:not(.check){display:flex;justify-content:space-between;align-items:center;gap:12px}#edgesDialog #edgeRadius{width:70px;min-height:29px;padding:4px 6px}#edgesDialog .check{margin:12px 0}#edgesDialog h2{font-size:17px}
 #headDialog{width:max-content!important;max-width:calc(100vw - 30px);padding:14px!important}#headDialog #headCanvas{display:block;max-width:520px!important;max-height:390px!important;margin:10px auto!important}#headDialog .dialogFoot{margin-top:10px;padding:0;justify-content:flex-end}#headDialog h2{font-size:17px}.dialogHead{cursor:move;touch-action:none;margin-bottom:10px!important}dialog{resize:none!important}dialog .dialogHead button{width:28px;min-width:28px;height:28px;min-height:28px;padding:0}
@@ -162,48 +155,14 @@ button:focus:not(:focus-visible){outline:none!important;box-shadow:none!importan
 #jobbar{position:relative;overflow:hidden}
 #jobbar:after{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;background:repeating-linear-gradient(90deg,#b69af5 0 20px,#b69af566 20px 40px);animation:jobbarSweep .8s linear infinite}
 
-/* Portrait Mode's nested layout: Preview spans the full height on one side,
-   Portraits and Adjustments stack on the other, and the delivery bar keeps
-   running the full width along the bottom like every other workspace. The
-   right column's width is draggable via .nestedDivider (see v1.js); its
-   px width is written to --nestedCol on .layout. */
-.layout.nested{display:grid!important;grid-template-columns:1fr var(--nestedCol,340px);grid-template-rows:260px 1fr auto;gap:10px!important}
-.layout.nested>.editor{grid-row:1/3!important;grid-column:1!important;flex:none!important}
-.layout.nested>.batch{grid-row:1!important;grid-column:2!important;flex:none!important;min-height:0;overflow:hidden}
-.layout.nested>.inspector{grid-row:2!important;grid-column:2!important;flex:none!important;min-height:0;overflow:auto}
-.layout.nested>.delivery{grid-row:3!important;grid-column:1/-1!important}
-.layout.nested .workspaceDivider{display:none!important}
-.nestedDivider{display:none;grid-row:1/3;grid-column:1;justify-self:end;width:10px;margin-right:-15px;cursor:col-resize;position:relative;z-index:5}
-.nestedDivider:after{content:'';position:absolute;left:4px;top:0;bottom:0;width:2px;background:transparent}
-.nestedDivider:hover:after,.nestedDivider.dragging:after{background:#ae91f2}
-.layout.nested>.nestedDivider{display:block}
-
-/* Filmstrip: the Portraits panel reflows into a horizontal scrolling strip of
-   compact cards once it's been expanded past a width threshold (see the
-   ResizeObserver in v1.js, which toggles this class -- it is not simply tied
-   to Portrait Mode being active). */
-.batch.filmstrip{display:flex;flex-direction:column}
-.batch.filmstrip .queue{display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;gap:8px;flex:1}
-.batch.filmstrip .portraitRow{flex:0 0 auto;display:flex;flex-direction:column}
-.batch.filmstrip .queueItem{flex-direction:column;align-items:center;width:84px;min-height:0;gap:6px;text-align:center;border-color:#3b4956;border-radius:8px}
-.batch.filmstrip .queueItem img{width:64px;height:64px;object-fit:cover;border:1px solid #4a5a68;border-radius:6px}
-.batch.filmstrip .qText{flex:none;width:100%;align-self:auto}
-.batch.filmstrip .queueItem strong{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.batch.filmstrip .originalDimensions,.batch.filmstrip .qText>span{display:none}
-.batch.filmstrip .portraitTrash{right:2px;bottom:2px;width:16px;min-width:16px;height:16px;min-height:16px}
+/* Responsive Portraits orientation (horizontal filmstrip vs vertical list)
+   and the tool panels' own reflow now live in dockview-theme.css, driven by
+   each panel's own CSS container query rather than a workspace-wide
+   ResizeObserver + orientation flag -- it applies wherever a panel is docked,
+   not just in one specific arrangement. */
 
 /* The Portraits panel footer buttons (Apply all cutouts, New batch) were
    stretching to the panel's full width via clarette.css's #applyCutouts{
    width:100%} plus .batchFoot's align-items:stretch. They shouldn't grow just
    because the panel is wide. */
 .batchFoot button{flex:none!important;width:auto!important;max-width:200px}
-
-/* Adjustments panel reflowing into outlined columns once it's wide enough
-   (toggled by the same ResizeObserver as the filmstrip breakpoint). Each
-   direct section becomes its own outlined column: Position ("Output Size &
-   Framing"), Color, Enhance ("Detail"). A fourth Mask column isn't here yet --
-   mask controls currently live in the Preview panel's cutout toolbar, not
-   this panel; moving them in is a separate decision, not made yet. */
-.inspector.wide{display:grid!important;grid-template-columns:repeat(3,minmax(180px,1fr));gap:12px;align-content:start}
-.inspector.wide>.inspectorTabs{grid-column:1/-1}
-.inspector.wide>section{border:1px solid #354552;border-radius:10px;padding:13px!important;margin:0}

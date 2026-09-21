@@ -1,7 +1,15 @@
 'use strict';
 importScripts('curve-math.js');
+const RANGE_CENTERS={red:0,yellow:60,green:120,cyan:180,blue:240,magenta:300};
 function adjustPixels(c,col){const ctx=c.getContext('2d',{willReadFrequently:true}),im=ctx.getImageData(0,0,c.width,c.height),a=im.data;const maps=['red','green','blue'].map(ch=>Array.from({length:256},(_,i)=>interp(interp(i/255,col[ch]),col.rgb)));
- for(let i=0;i<a.length;i+=4){let r=maps[0][a[i]],g=maps[1][a[i+1]],b=maps[2][a[i+2]];const temp=col.temperature||0,tint=col.tint||0;r=Math.max(0,Math.min(1,r*(1+temp*.0015+tint*.0005)));g=Math.max(0,Math.min(1,g*(1-tint*.001)));b=Math.max(0,Math.min(1,b*(1-temp*.0015+tint*.0005)));const lum=.2126*r+.7152*g+.0722*b;const d=col.shadows/100*.45*(1-lum)**3+col.highlights/100*.35*lum**3;r=Math.max(0,Math.min(1,r+d));g=Math.max(0,Math.min(1,g+d));b=Math.max(0,Math.min(1,b+d));
- if(col.hue||col.saturation){const max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;let h=0;if(delta)h=max===r?((g-b)/delta)%6:max===g?(b-r)/delta+2:(r-g)/delta+4;h=((h*60+col.hue)%360+360)%360;const sat=Math.max(0,Math.min(1,(max?delta/max:0)*(1+col.saturation/100))),v=max,C=v*sat,X=C*(1-Math.abs((h/60)%2-1)),m=v-C;let q=h<60?[C,X,0]:h<120?[X,C,0]:h<180?[0,C,X]:h<240?[0,X,C]:h<300?[X,0,C]:[C,0,X];[r,g,b]=q.map(v=>v+m)}a[i]=Math.round(r*255);a[i+1]=Math.round(g*255);a[i+2]=Math.round(b*255)}ctx.putImageData(im,0,0);return c}
+ const rangeEntries=Object.entries(col.color_ranges||{}).filter(([,v])=>v.hue||v.saturation||v.lightness);
+ const exposure=col.exposure||0,lightness=col.lightness||0,grain=col.grain||0;
+ for(let i=0;i<a.length;i+=4){let r=maps[0][a[i]],g=maps[1][a[i+1]],b=maps[2][a[i+2]];const temp=col.temperature||0,tint=col.tint||0,exp=1+exposure/100;r=Math.max(0,Math.min(1,r*(1+temp*.0015+tint*.0005)*exp));g=Math.max(0,Math.min(1,g*(1-tint*.001)*exp));b=Math.max(0,Math.min(1,b*(1-temp*.0015+tint*.0005)*exp));const lum=.2126*r+.7152*g+.0722*b;const d=col.shadows/100*.45*(1-lum)**3+col.highlights/100*.35*lum**3;r=Math.max(0,Math.min(1,r+d));g=Math.max(0,Math.min(1,g+d));b=Math.max(0,Math.min(1,b+d));
+ if(col.hue||col.saturation||lightness||rangeEntries.length){const max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;let h=0;if(delta)h=max===r?((g-b)/delta)%6:max===g?(b-r)/delta+2:(r-g)/delta+4;h=((h*60)%360+360)%360;
+  let hh=((h+col.hue)%360+360)%360,sat=Math.max(0,Math.min(1,(max?delta/max:0)*(1+col.saturation/100))),v=Math.max(0,Math.min(1,max*(1+lightness/100)));
+  for(const [name,entry] of rangeEntries){const dist=Math.abs(((h-RANGE_CENTERS[name]+180)%360+360)%360-180),weight=Math.max(0,Math.min(1,1-dist/60));if(!weight)continue;hh=((hh+weight*entry.hue)%360+360)%360;sat=Math.max(0,Math.min(1,sat*(1+weight*entry.saturation/100)));v=Math.max(0,Math.min(1,v*(1+weight*entry.lightness/100)))}
+  const C=v*sat,X=C*(1-Math.abs((hh/60)%2-1)),m=v-C;let q=hh<60?[C,X,0]:hh<120?[X,C,0]:hh<180?[0,C,X]:hh<240?[0,X,C]:hh<300?[X,0,C]:[C,0,X];[r,g,b]=q.map(x=>x+m)}
+ if(grain){const n=(Math.random()-.5)*(grain/100*.08);r=Math.max(0,Math.min(1,r+n));g=Math.max(0,Math.min(1,g+n));b=Math.max(0,Math.min(1,b+n))}
+ a[i]=Math.round(r*255);a[i+1]=Math.round(g*255);a[i+2]=Math.round(b*255)}ctx.putImageData(im,0,0);return c}
 
 self.onmessage=({data:d})=>{try{const im={data:new Uint8ClampedArray(d.pixels)};const c={width:d.width,height:d.height,getContext:()=>({getImageData:()=>im,putImageData:()=>{}})};adjustPixels(c,d.color);self.postMessage({id:d.id,pixels:im.data.buffer},[im.data.buffer])}catch(e){self.postMessage({id:d.id,error:String(e)})}};

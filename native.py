@@ -185,7 +185,10 @@ def install(app,url):
         # auto-insert here -- this is the only "Enter Full Screen" item that exists.
         item(view,'Entire Screen','fullscreen')
         workspace=menu('Workspace')
-        for title,cmd in [('Landscape Mode','landscape'),('Portrait Mode','portrait'),('-',''),('New Workspace…','workspace-new'),('Rename Workspace…','workspace-rename'),('Delete Workspace…','workspace-delete'),('-',''),('Unlock Workspace' if app.S['workspaces'][app.S['workspace']].get('locked') else 'Lock Workspace','workspace-lock'),('Reset Current Workspace','workspace-reset')]:item(workspace,title,cmd)
+        for title,cmd in [('Landscape Mode','workspace-landscape'),('Portrait Mode','workspace-portrait'),('-',''),
+                          ('New Workspace…','workspace-new'),('Rename Workspace…','workspace-rename'),('Delete Workspace…','workspace-delete'),('-',''),
+                          ('Save Workspace Layout','workspace-save'),('Reset Current Workspace','workspace-reset'),('Restore Default Layout','workspace-restore-default'),('-',''),
+                          ('Unlock Workspace' if app.S['workspace2'].get('locked') else 'Lock Workspace','workspace-lock')]:item(workspace,title,cmd)
         helpmenu=menu('Help')
         for title,cmd in [('Documentation & Tutorials','help'),('Keyboard Shortcuts…','shortcuts'),('Send Feedback…','feedback')]:item(helpmenu,title,cmd)
         A.NSApplication.sharedApplication().setMainMenu_(main);A.NSApplication.sharedApplication().setHelpMenu_(helpmenu)

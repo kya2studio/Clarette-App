@@ -19,8 +19,17 @@ SESSIONS={}
 UPSCALERS={}
 FACE_DETECTORS={}
 
+COLOR_RANGES = ('red', 'yellow', 'green', 'cyan', 'blue', 'magenta')
+# Hue wheel position (degrees) each named range is centered on; used both to
+# validate/apply per-range adjustments and to place bracket markers on the
+# Hue spectrum slider in the UI.
+RANGE_HUE_CENTER = dict(red=0, yellow=60, green=120, cyan=180, blue=240, magenta=300)
+
+def _range_defaults():
+    return {name: dict(hue=0, saturation=0, lightness=0) for name in COLOR_RANGES}
+
 def color_defaults():
-    return dict(rgb=[[0,0],[1,1]],red=[[0,0],[1,1]],green=[[0,0],[1,1]],blue=[[0,0],[1,1]],hue=0,saturation=0,shadows=0,highlights=0,temperature=0,tint=0)
+    return dict(rgb=[[0,0],[1,1]],red=[[0,0],[1,1]],green=[[0,0],[1,1]],blue=[[0,0],[1,1]],hue=0,saturation=0,lightness=0,shadows=0,highlights=0,temperature=0,tint=0,exposure=0,grain=0,color_ranges=_range_defaults())
 
 def load(path):
     with Image.open(path) as src:
@@ -45,10 +54,19 @@ def settings(c):
         pts=sorted([[float(x),float(y)] for x,y in c.get(ch,out[ch])])
         if not 2<=len(pts)<=20 or any(not math.isfinite(x+y) or not 0<=x<=1 or not 0<=y<=1 for x,y in pts) or any(b[0]<=a[0] for a,b in zip(pts,pts[1:])):raise ValueError('Invalid curve points')
         out[ch]=pts
-    for ch in ('hue','saturation','shadows','highlights','temperature','tint'):
+    for ch in ('hue','saturation','lightness','shadows','highlights','temperature','tint','exposure','grain'):
         value=float(c.get(ch,0));limit=180 if ch=='hue' else 100
         if not math.isfinite(value):raise ValueError('Invalid color adjustment')
         out[ch]=max(-limit,min(limit,value))
+    ranges=c.get('color_ranges') or {}
+    if not isinstance(ranges,dict):raise ValueError('Invalid color range adjustment')
+    for name in COLOR_RANGES:
+        entry=ranges.get(name) or {}
+        if not isinstance(entry,dict):raise ValueError('Invalid color range adjustment')
+        for ch in ('hue','saturation','lightness'):
+            value=float(entry.get(ch,0));limit=180 if ch=='hue' else 100
+            if not math.isfinite(value):raise ValueError('Invalid color range adjustment')
+            out['color_ranges'][name][ch]=max(-limit,min(limit,value))
     return out
 
 def curve_values(x,points):
@@ -59,6 +77,12 @@ def curve_values(x,points):
     v=np.clip(np.asarray(x),p[0,0],p[-1,0]);i=np.clip(np.searchsorted(p[:,0],v,side='right')-1,0,len(h)-1);t=(v-p[i,0])/h[i];t2=t*t;t3=t2*t
     return np.clip((2*t3-3*t2+1)*p[i,1]+(t3-2*t2+t)*h[i]*m[i]+(-2*t3+3*t2)*p[i+1,1]+(t3-t2)*h[i]*m[i+1],0,1)
 
+def _hue_weight(hue,center):
+    """Triangular falloff: 1 at `center`, 0 by +/-60 degrees away (the
+    midpoint to each neighboring range on the wheel), wrapping through 0/360."""
+    d=np.abs((hue-center+180)%360-180)
+    return np.clip(1-d/60,0,1)
+
 def color(im,c):
     c=settings(c)
     if c==color_defaults():return im.copy()
@@ -66,14 +90,38 @@ def color(im,c):
     # Curves are byte-indexed lookup tables, identical to the live preview.
     for i,ch in enumerate(('red','green','blue')):
         lut=curve_values(curve_values(x,c[ch]),c['rgb']).astype(np.float32);rgb[:,:,i]=lut[a[:,:,i]]
-    rgb*=np.array([1+c['temperature']*.0015+c['tint']*.0005,1-c['tint']*.001,1-c['temperature']*.0015+c['tint']*.0005],np.float32);np.clip(rgb,0,1,out=rgb)
+    rgb*=np.array([1+c['temperature']*.0015+c['tint']*.0005,1-c['tint']*.001,1-c['temperature']*.0015+c['tint']*.0005],np.float32)
+    rgb*=1+c['exposure']/100;np.clip(rgb,0,1,out=rgb)
     lum=rgb@np.array([.2126,.7152,.0722],np.float32)
     delta=(c['shadows']/100*.45*(1-lum)**3+c['highlights']/100*.35*lum**3)[:,:,None]
     rgb=np.clip(rgb+delta,0,1)
-    if c['hue'] or c['saturation']:
+    ranges=c['color_ranges']
+    if c['hue'] or c['saturation'] or c['lightness'] or any(any(entry.values()) for entry in ranges.values()):
         import cv2
-        hsv=cv2.cvtColor(rgb,cv2.COLOR_RGB2HSV);hsv[:,:,0]=(hsv[:,:,0]+c['hue'])%360;hsv[:,:,1]=np.clip(hsv[:,:,1]*(1+c['saturation']/100),0,1)
+        hsv=cv2.cvtColor(rgb,cv2.COLOR_RGB2HSV)
+        h,s,v=hsv[:,:,0],hsv[:,:,1],hsv[:,:,2]
+        # Master (Hue spectrum + Saturation + Lightness with no range selected)
+        # applies uniformly; each named range then adds its own hue/sat/lightness
+        # delta, weighted by how close a pixel's *original* hue is to that
+        # range's center on the wheel -- soft-edged like Photoshop's Hue/Saturation,
+        # not a hard selection, so adjacent ranges blend instead of banding.
+        h_shifted=(h+c['hue'])%360
+        s_shifted=np.clip(s*(1+c['saturation']/100),0,1)
+        v_shifted=np.clip(v*(1+c['lightness']/100),0,1)
+        for name,entry in ranges.items():
+            if not (entry['hue'] or entry['saturation'] or entry['lightness']):continue
+            weight=_hue_weight(h,RANGE_HUE_CENTER[name])
+            h_shifted=(h_shifted+weight*entry['hue'])%360
+            s_shifted=np.clip(s_shifted*(1+weight*entry['saturation']/100),0,1)
+            v_shifted=np.clip(v_shifted*(1+weight*entry['lightness']/100),0,1)
+        hsv[:,:,0],hsv[:,:,1],hsv[:,:,2]=h_shifted,s_shifted,v_shifted
         rgb=cv2.cvtColor(hsv,cv2.COLOR_HSV2RGB)
+    if c['grain']:
+        # A fixed seed keeps the grain texture itself stable across repeated
+        # renders of the same edit (only its strength changes with the
+        # slider) instead of shimmering between frames like fresh noise would.
+        noise=np.random.default_rng(0).standard_normal(rgb.shape[:2]).astype(np.float32)[:,:,None]
+        rgb=np.clip(rgb+noise*(c['grain']/100*.05),0,1)
     a[:,:,:3]=np.uint8(np.clip(np.rint(rgb*255),0,255));return Image.fromarray(a)
 
 def auto_color(im):
@@ -132,14 +180,30 @@ def faces(im,models,report=lambda s:None):
         return sorted([dict(x=float(f[0]/scale),y=float(f[1]/scale),w=float(f[2]/scale),h=float(f[3]/scale),eye_y=float((f[5]+f[7])/(2*scale)),confidence=float(f[-1]),
                             landmarks=[[float(f[4+2*i]/scale),float(f[5+2*i]/scale)] for i in range(5)]) for f in found],key=lambda f:f['w']*f['h'],reverse=True)
 
+
+# Every current model resizes its input to this fixed square internally
+# (rembg's session.normalize(), e.g. sessions/birefnet_general.py) regardless
+# of what we hand it, then we upsample its output mask back to the source's
+# own size ourselves below -- so inference cost is already constant, and
+# feeding it the source at full resolution only pays for a slower composite
+# and a slower resize-in with nothing to show for it. Pre-shrinking to (at
+# most) the model's own working size keeps that overhead from scaling with
+# megapixels, which is the actual reason larger sources felt much slower.
+MODEL_INPUT_SIZE={'birefnet-general':1024,'birefnet-portrait':1024,'u2netp':320}
+
 def segment(im,models,engine,report=lambda s:None,accelerate=False):
-    if engine not in ('birefnet-general-lite','birefnet-general','birefnet-portrait','u2netp'):raise ValueError('Unknown cutout model')
+    if engine not in MODEL_INPUT_SIZE:raise ValueError('Unknown cutout model')
     alpha=im.getchannel('A')
     key=hashlib.sha256(im.tobytes()+str(im.size).encode()+engine.encode()+b'fresh-alpha-v1').hexdigest()
     cache=cache_dir(support_dir())/'mask-cache'/f'{key}.png'
     if cache.exists():
         report('Reusing this source’s cached subject detection…')
         with Image.open(cache) as cached:return cached.convert('L')
+    work_size=MODEL_INPUT_SIZE[engine]
+    composite=Image.alpha_composite(Image.new('RGBA',im.size,'#808080'),im).convert('RGB')
+    if max(im.size)>work_size:
+        scale=work_size/max(im.size)
+        composite=composite.resize((max(1,round(im.width*scale)),max(1,round(im.height*scale))),Image.Resampling.LANCZOS)
     with LOCK:
         os.environ['U2NET_HOME']=str(Path(models)/'rembg');os.environ.setdefault('OMP_NUM_THREADS','4')
         from rembg import new_session, remove
@@ -157,11 +221,11 @@ def segment(im,models,engine,report=lambda s:None,accelerate=False):
                 report('Apple acceleration unavailable for this model; using CPU…')
                 SESSIONS[session_key]=new_session(engine,providers=['CPUExecutionProvider'])
         report('Detecting the subject, hair and accessories…')
-        try:prediction=remove(Image.alpha_composite(Image.new('RGBA',im.size,'#808080'),im).convert('RGB'),session=SESSIONS[session_key],only_mask=True,post_process_mask=False)
+        try:prediction=remove(composite,session=SESSIONS[session_key],only_mask=True,post_process_mask=False)
         except Exception:
             if len(providers)==1:raise
             report('Retrying detection on CPU…');SESSIONS[session_key]=new_session(engine,providers=['CPUExecutionProvider'])
-            prediction=remove(Image.alpha_composite(Image.new('RGBA',im.size,'#808080'),im).convert('RGB'),session=SESSIONS[session_key],only_mask=True,post_process_mask=False)
+            prediction=remove(composite,session=SESSIONS[session_key],only_mask=True,post_process_mask=False)
         mask=prediction.convert('L').resize(im.size,Image.Resampling.LANCZOS)
         values=np.asarray(mask)
         coverage=float(np.mean(values>127));uncertain=coverage>.985 or coverage<.002

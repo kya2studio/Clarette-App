@@ -9,7 +9,8 @@ DEFAULTS={
  'brush-size':'Meta+Wheel','rotate-wheel':'Shift+Wheel',
  'prompt':'','chatgpt':'','gemini':'','photoshop':'','affinity':'','photos':'',
  'import-zip':'','final':'','batch-folder':'','rename-batch':'','help':'','shortcuts':'','feedback':'',
- 'landscape':'','portrait':'','workspace-new':'','workspace-rename':'','workspace-delete':'','workspace-lock':'','workspace-reset':'',
+ 'workspace-landscape':'','workspace-portrait':'',
+ 'workspace-new':'','workspace-rename':'','workspace-delete':'','workspace-save':'','workspace-lock':'','workspace-reset':'','workspace-restore-default':'',
 }
 
 def validate(overrides):

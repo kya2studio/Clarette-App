@@ -148,27 +148,51 @@ def handle(a,path,d):
         for k in ('notifications','notification_sound'): a.S['settings'][k]=preferences.defaults()[k]
         a.save();return {'ok':True}
     if path=='/api/workspace':
-        spaces=a.S['workspaces'];key=d.get('id',a.S['workspace']);op=d.get('operation','save')
-        if op=='create':
-            key=a.ident();spaces[key]=preferences.validate_workspace(d['workspace'])
-        elif key not in spaces: raise ValueError('Workspace not found')
-        elif op=='select': pass
-        elif op=='delete':
-            if key in preferences.WORKSPACES: raise ValueError('Built-in workspaces cannot be deleted')
-            del spaces[key];key='landscape'
-        elif op=='reset': spaces[key]=copy.deepcopy(preferences.WORKSPACES.get(key,dict(preferences.WORKSPACES['landscape'],name=spaces[key]['name'])))
+        ws=preferences.validate_workspace2(a.S.get('workspace2',preferences.default_workspace2()));op=d.get('operation','select')
+        if op=='select':
+            key=d.get('id')
+            if key not in preferences.WORKSPACE_PRESETS and key not in ws['custom']: raise ValueError('Workspace not found')
+            ws['active']=key
+        elif op in ('save','create'):
+            # 'save' while a built-in preset is active forks it into a new custom
+            # workspace (presets stay protected); 'save' while already on a custom
+            # workspace overwrites it in place. 'create' always makes a new one
+            # (used by the "New Workspace..." window).
+            layout=preferences.validate_dockview_layout(d['layout'])
+            if op=='create' or ws['active'] in preferences.WORKSPACE_PRESETS:
+                # Only 'create' (the explicit "New Workspace..." menu action) may
+                # fork while locked; a bare 'save' -- the debounced autosave that
+                # fires on any layout change, including a remote-driven preset
+                # switch replaying through the local dockview instance -- must not
+                # silently spawn a new custom workspace behind a locked one.
+                if op=='save' and ws.get('locked'): raise ValueError('Unlock the workspace to save changes')
+                key=a.ident();name=str(d.get('name','')).strip() or 'Custom Layout'
+                based_on=ws['active'] if ws['active'] in preferences.WORKSPACE_PRESETS else None
+                ws['custom'][key]=dict(name=name,layout=layout,basedOn=based_on);ws['active']=key
+            else:
+                if ws.get('locked'): raise ValueError('Unlock the workspace to save changes')
+                key=ws['active'];ws['custom'][key]=dict(ws['custom'][key],layout=layout)
         elif op=='rename':
-            if key in preferences.WORKSPACES: raise ValueError('Built-in workspace names are protected')
-            spaces[key]=preferences.validate_workspace(dict(spaces[key],name=d['name']))
-        elif op=='lock': spaces[key]['locked']=bool(d['locked'])
-        elif op=='save':
-            if spaces[key].get('locked'): raise ValueError('Unlock the workspace layout first')
-            spaces[key]=preferences.validate_workspace(dict(d['workspace'],name=spaces[key]['name']))
+            if ws['active'] not in ws['custom']: raise ValueError('Built-in workspace names are protected')
+            name=str(d.get('name','')).strip()
+            if not name or len(name)>80: raise ValueError('Enter a workspace name under 80 characters')
+            ws['custom'][ws['active']]=dict(ws['custom'][ws['active']],name=name)
+        elif op=='delete':
+            if ws['active'] not in ws['custom']: raise ValueError('Built-in workspaces cannot be deleted')
+            del ws['custom'][ws['active']];ws['active']='landscape'
+        elif op=='lock': ws['locked']=bool(d.get('locked'))
+        elif op=='reset':
+            # Discard customizations to the current layout, reverting to the preset it
+            # forked from (or the default, if it wasn't a fork of anything in particular).
+            if ws['active'] in ws['custom']:
+                based_on=ws['custom'][ws['active']].get('basedOn') or 'landscape'
+                del ws['custom'][ws['active']];ws['active']=based_on
+        elif op=='restore-default': ws['active']='landscape'
         else: raise ValueError('Unknown workspace operation')
-        a.S['workspace']=key;a.save()
+        a.S['workspace2']=preferences.validate_workspace2(ws);a.save()
         import native
         native.refresh_menus()
-        return {'id':key}
+        return {'active':a.S['workspace2']['active']}
     if path=='/api/preset-manage':
         key=d.get('id');op=d['operation']
         if op in ('delete','rename','edit') and key in preferences.BUILTINS: raise ValueError('Built-in presets are protected')
@@ -185,10 +209,13 @@ def handle(a,path,d):
     if path=='/api/preferences-export': return {'document':preferences.portable(a.S)}
     if path=='/api/preferences-import':
         doc=d['document']
-        if doc.get('format')!='clarette-preferences' or doc.get('version')!=1: raise ValueError('Choose a Clarette preferences file')
+        if doc.get('format')!='clarette-preferences' or doc.get('version') not in (1,2): raise ValueError('Choose a Clarette preferences file')
         if not d.get('confirmed'): raise ValueError('Confirm replacing preferences')
         settings=preferences.validate_settings(doc.get('settings',{}),a.S['settings'])
-        spaces={k:preferences.validate_workspace(v) for k,v in doc.get('workspaces',{}).items()}
+        # Preferences files exported before the Dockview rewrite (version 1) carried an
+        # `orientation`/`order`/`sizes` workspace shape that no longer means anything;
+        # there's nothing safe to migrate, so those imports just fall back to Default.
+        workspace2,_=preferences.recover_workspace2(doc.get('workspace2') if doc.get('version')==2 else None)
         from output_presets import validate_document
         from guides import guide_for
         presets={}
@@ -196,8 +223,7 @@ def handle(a,path,d):
             p=dict(v,guide=v.get('guide') or guide_for(v));p=validate_document(dict(format='clarette-output-presets',version=1,presets=[p]))[0];p.pop('import_id',None);presets[k]=p
         from shortcuts import validate
         shortcuts=validate(doc.get('shortcuts',{}))
-        a.S['settings']=settings;a.S['workspaces']={**copy.deepcopy(preferences.WORKSPACES),**spaces};a.S['presets']={**presets,**copy.deepcopy(preferences.BUILTINS)};a.S['shortcuts']=shortcuts
-        if a.S['workspace'] not in a.S['workspaces']:a.S['workspace']='landscape'
+        a.S['settings']=settings;a.S['workspace2']=workspace2;a.S['presets']={**presets,**copy.deepcopy(preferences.BUILTINS)};a.S['shortcuts']=shortcuts
         a.save();return {'ok':True}
     if path=='/api/shortcuts':
         from shortcuts import validate

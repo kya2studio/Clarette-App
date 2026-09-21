@@ -1,0 +1,17 @@
+{
+  "name": "clarette-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Frontend dependencies for the Clarette pywebview app. No bundler: web/vendor/dockview is a vendored, checked-in copy of the dockview-core UMD build + stylesheet used directly by web/index.html.",
+  "scripts": {
+    "sync-dockview": "node scripts/sync-dockview.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kya2studio/Clarette-App.git"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "dockview": "^8.3.1"
+  }
+}

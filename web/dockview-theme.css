@@ -1,0 +1,342 @@
+/* Clarette's dark + lilac Dockview theme, and panel-body responsive rules.
+ * Loaded after vendor/dockview/dockview.css. Color tokens mirror clarette.css's
+ * :root block (--bg #17191f, --panel #1d2027, --line #383b48, accent #b39af4,
+ * --radius 10px) so docked panels read as the same app, not a themed widget. */
+
+.dockview-theme-clarette {
+  color-scheme: dark;
+  --dv-color-clarette-bg: #17191f;
+  --dv-color-clarette-panel: #1d2027;
+  --dv-color-clarette-tabstrip: #1a1c22;
+  --dv-color-clarette-line: #383b48;
+  --dv-color-clarette-text: #f2f1f7;
+  --dv-color-clarette-muted: #b1b4c8;
+  --dv-color-clarette-accent: #b39af4;
+
+  --dv-group-view-background-color: var(--dv-color-clarette-panel);
+  --dv-tabs-and-actions-container-background-color: var(--dv-color-clarette-tabstrip);
+  --dv-tabs-and-actions-container-font-size: 12px;
+  --dv-tabs-and-actions-container-height: 36px;
+  --dv-tab-font-size: 12px;
+  --dv-tab-margin: 2px;
+  --dv-tab-margin-inline: 2px;
+  --dv-tab-border-radius: 8px;
+  --dv-tab-close-icon-size: 13px;
+  --dv-tab-divider-color: var(--dv-color-clarette-line);
+  --dv-tab-group-line-height: 2px;
+  --dv-tab-group-line-opacity: 0.7;
+  --dv-tabs-container-scrollbar-color: #4a4f5c;
+  --dv-scrollbar-background-color: var(--dv-color-clarette-line);
+
+  --dv-activegroup-visiblepanel-tab-background-color: var(--dv-color-clarette-panel);
+  --dv-activegroup-visiblepanel-tab-color: var(--dv-color-clarette-text);
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-activegroup-hiddenpanel-tab-color: var(--dv-color-clarette-muted);
+  --dv-inactivegroup-visiblepanel-tab-background-color: transparent;
+  --dv-inactivegroup-visiblepanel-tab-color: var(--dv-color-clarette-muted);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-inactivegroup-hiddenpanel-tab-color: rgba(177, 180, 200, 0.55);
+
+  --dv-separator-border: var(--dv-color-clarette-line);
+  --dv-paneview-header-border-color: var(--dv-color-clarette-line);
+  --dv-paneview-active-outline-color: var(--dv-color-clarette-accent);
+
+  --dv-border-radius: 10px;
+  --dv-sash-border-radius: 3px;
+  --dv-dropdown-border-radius: 8px;
+  --dv-spacing-padding: 8px;
+
+  --dv-sash-color: transparent;
+  --dv-active-sash-color: var(--dv-color-clarette-accent);
+  --dv-active-sash-transition-duration: 0.12s;
+  --dv-active-sash-transition-delay: 0s;
+
+  /* Docking targets + the translucent placement preview. */
+  --dv-drag-over-background-color: rgba(179, 154, 244, 0.16);
+  --dv-drag-over-border-color: var(--dv-color-clarette-accent);
+  --dv-drag-over-border: 2px solid var(--dv-color-clarette-accent);
+  --dv-edge-dock-indicator-color: rgba(179, 154, 244, 0.9);
+  --dv-smart-guides-color: var(--dv-color-clarette-accent);
+  --dv-smart-guides-preview-color: rgba(179, 154, 244, 0.28);
+  --dv-dnd-compass-color: var(--dv-color-clarette-muted);
+  --dv-dnd-compass-cell-color: rgba(179, 154, 244, 0.14);
+  --dv-dnd-compass-active-cell-color: rgba(179, 154, 244, 0.42);
+  --dv-dnd-compass-edge-cell-color: rgba(179, 154, 244, 0.1);
+
+  --dv-icon-hover-background-color: rgba(179, 154, 244, 0.18);
+  --dv-context-menu-background-color: var(--dv-color-clarette-panel);
+  --dv-context-menu-color: var(--dv-color-clarette-text);
+  --dv-overlay-z-index: 60;
+}
+
+/* --- Host + panel chrome -------------------------------------------------- */
+
+/* .layout is handed directly to createDockview() as its root element -- see
+ * v1.css's `.layout{display:flex!important;...}` for its sizing. */
+.layout .dv-dockview {
+  font: 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+/* Custom tab: a leading grip icon (the visible "this is draggable" cue) plus
+ * title, no close button, no popout/float clutter. The tab element itself is
+ * dockview's native drag handle already -- the grip is purely visual. */
+.clarette-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  min-width: 0;
+}
+.clarette-tab > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clarette-tab-grip {
+  width: 10px;
+  height: 16px;
+  flex: none;
+  fill: currentColor;
+  opacity: 0.55;
+}
+.clarette-tab-handle-only {
+  padding: 0 6px;
+  gap: 0;
+}
+/* Drag Panels off (Settings > Workspace) locks the workspace -- panels stay
+ * usable but can't be dragged, so the handle disappears along with that
+ * ability instead of sitting there doing nothing. */
+.layoutLocked .clarette-tab-grip { display: none; }
+
+.tabDivider {
+  border: none;
+  border-top: 1px solid var(--dv-color-clarette-line, #383b48);
+  margin: 14px 0;
+}
+
+/* Minimize/restore chevron for the tools edge group (right edge, so
+ * collapsing points the chevron further right; expanded it points left,
+ * back toward the content it would restore). */
+.clarette-collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 4px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dv-color-clarette-muted);
+  cursor: pointer;
+}
+.clarette-collapse-toggle:hover {
+  background: rgba(179, 154, 244, 0.14);
+  color: var(--dv-color-clarette-text);
+}
+.clarette-collapse-toggle svg { width: 14px; height: 14px; transform: rotate(180deg); transition: transform 0.15s ease; }
+.clarette-collapse-toggle.collapsed svg { transform: rotate(0deg); }
+
+/* Dockview's own `.dv-content-container` is a bounded flex item
+ * (flex-grow:1;min-height:0), but it does not stretch a plain block child to
+ * fill it -- without an explicit height/width here, a panel body sizes to
+ * its own content instead of the space Dockview allocated for it, which
+ * either leaves dead space or (worse, since `.previews`'s `flex:1` then has
+ * no definite basis to shrink against) lets its content grow past the
+ * group's bounds. */
+.batch, .editor, .dockPanelBody {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+.dockPanelBody {
+  overflow: auto;
+  container-type: size;
+  padding: 12px;
+  color: var(--text);
+}
+.dockPanelBody.noPad { padding: 0; }
+/* The section-building scripts add their own `.sectionTitle` header per
+ * section; a docked panel's Dockview tab is already the outer title, so drop
+ * the redundant inner one where a panel body holds exactly one section --
+ * but only the plain label text. Color's Reset/Preview/Auto-color buttons and
+ * Mask's enable checkbox are appended into that same title bar by
+ * editor-tools.js/compact-controls.js, so a title with no other controls
+ * collapses entirely, while one with controls keeps them and just drops the
+ * redundant leading label. */
+.dockPanelBody > section:only-child > .sectionTitle:not(:has(> button, > input, > select)) {
+  display: none;
+}
+.dockPanelBody > section:only-child > .sectionTitle:has(> button, > input, > select) > span:first-child {
+  display: none;
+}
+
+.layout.layoutLocked .dv-sash { pointer-events: none; opacity: 0.35; }
+
+/* clarette.css's round-thumb slider styling was scoped to `.inspector
+ * input[type=range]` -- the panel that used to hold Output/Color/Detail/Mask
+ * before they moved into their own dockPanelBody wrappers. Without this,
+ * every slider there (Strength included) silently fell back to the browser's
+ * native track/thumb, which is exactly the "square-like slider" regression. */
+.dockPanelBody input[type=range] { appearance: none; -webkit-appearance: none; height: 18px; background: transparent; padding: 0; }
+.dockPanelBody input[type=range]::-webkit-slider-runnable-track { height: 4px; background: #6d667e; border: 0; border-radius: 4px; }
+.dockPanelBody input[type=range]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; background: #d1c0f8; margin-top: -5px; box-shadow: none; }
+
+/* Job/notification toast: centered in the top toolbar instead of floating
+ * over Preview, so it stays visible and in a fixed spot regardless of which
+ * panel ends up docked where. */
+.topbar { position: relative; }
+#notificationStack {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  pointer-events: none;
+}
+#notificationStack #jobbar, #notificationStack #toast { pointer-events: auto; }
+
+/* Default (vertical list) card: the trash button was `position:absolute`,
+ * pinned a fixed offset up from the row's bottom-right corner -- fine as
+ * long as the name/dimensions text stayed within its assumed line count,
+ * but a longer or differently-wrapping name (a 2nd "Original: N x" / "M px"
+ * line, e.g.) grows the row underneath a button that doesn't know to move,
+ * so it ends up overlapping instead of sitting in the corner. Making the
+ * button a normal flex sibling instead of an absolutely-positioned overlay
+ * means there's always room reserved for it, whatever the text does. */
+.batch .portraitRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.batch .portraitRow > .queueItem { flex: 1; min-width: 0; }
+.batch .portraitTrash {
+  position: static;
+  flex: none;
+  margin: 0 4px 0 0;
+}
+
+/* --- Responsive Portraits: horizontal filmstrip vs vertical list ---------- */
+/* Driven by the *panel's own* box via a CSS container query -- not window
+ * width -- so it reflows correctly no matter where it's docked. A single
+ * aspect-ratio breakpoint (rather than width alone) avoids flapping between
+ * layouts as a panel is dragged through in-between sizes. */
+
+/* .batch (Portraits) and .editor (Preview) are used directly as their own
+ * Dockview panel bodies -- no extra `.dockPanelBody` wrapper -- since both
+ * already manage their own internal header/scroll-region/footer layout
+ * (.batchbar / .queue / .batchFoot) and adding an outer scrolling+padded
+ * wrapper would break that pinned-header/pinned-footer structure. */
+.batch {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  container-type: size;
+  container-name: portraits;
+}
+.batch .queueItem strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+
+/* Wide-and-short: horizontal scrolling row of compact cards (mockup 3).
+ * Gated on aspect ratio (not width alone) so a panel that's merely wide but
+ * still tall -- e.g. spanning a full-height column -- stays a vertical list;
+ * only a panel that's actually short-and-wide switches. The single breakpoint
+ * (no separate enter/exit thresholds) is deliberate: a container query only
+ * re-evaluates on an actual box-size change, so there's no repeated-callback
+ * jitter to dampen the way a JS ResizeObserver would need. */
+@container portraits (min-aspect-ratio: 3/2) {
+  .batch .queue { display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; gap: 14px; flex: 1; padding: 4px 6px 10px; }
+  .batch .portraitRow { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; }
+  .batch .queueItem { flex-direction: column; align-items: center; width: 108px; min-height: 0; gap: 8px; padding: 10px !important; text-align: center; border-color: var(--line); border-radius: 10px; }
+  .batch .queueItem img { width: 80px; height: 80px; object-fit: cover; border: 1px solid #4a5a68; border-radius: 6px; }
+  .batch .qText { flex: none; width: 100%; align-self: auto; padding-right: 0 !important; }
+  .batch .queueItem strong { font-size: 11px; }
+  .batch .originalDimensions,
+  .batch .qText > span { display: none; }
+  /* Its own row below the card, not overlaid on a corner, so it has room to
+   * be a normal tappable button instead of a cramped 16px hotspot pinned
+   * over the thumbnail/name. */
+  .batch .portraitTrash { position: static; margin-top: 2px; width: 22px; min-width: 22px; height: 22px; min-height: 22px; }
+}
+/* Narrow-and-tall: vertical scrolling list (mockup 4) -- the unconditional
+ * default above already does this; .queue's own overflow-y:auto (style.css)
+ * supplies the scrolling. */
+
+/* --- Responsive tool panels (Output Size, Color, Detail, Mask) ------------ */
+/* Stack side-by-side rows once the panel is too narrow for them, before
+ * anything overlaps or clips; scroll is the last resort at the practical
+ * minimum (panel `minimumWidth`/`minimumHeight` constraints keep it from
+ * going below that). */
+@container (max-width: 300px) {
+  .dockPanelBody .two,
+  .dockPanelBody .three,
+  .dockPanelBody .outputDimensions,
+  .dockPanelBody .colorGrid,
+  .dockPanelBody .maskButtons { grid-template-columns: 1fr !important; flex-direction: column; align-items: stretch; }
+  /* Width/Height/DPI stack as full-width labeled rows instead of squeezing
+   * three inputs (plus their '×'/'px'/'dpi' captions) into one narrow row. */
+  .dockPanelBody .outputDimensions { gap: 6px; }
+  .dockPanelBody .outputDimensions input { width: 100%; flex: none; }
+  .dockPanelBody .outputDimensions > span { text-align: left; }
+}
+.dockPanelBody[data-panel='color'] .curveBox canvas#curves {
+  width: 100%;
+  height: auto;
+  min-height: 120px;
+  max-width: 280px;
+}
+
+/* --- Selective color: range swatches, hue spectrum, eyedropper ----------- */
+
+.selectiveColor { margin-top: 10px; }
+.selectiveColorHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.rangeSwatchLabel { margin: 2px 0 6px; font-size: 11px; }
+.rangeSwatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.rangeSwatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  padding: 0;
+  border: 2px solid transparent;
+  background: var(--swatch);
+  cursor: pointer;
+  min-height: 0;
+}
+.rangeSwatch[data-range='master'] { background: repeating-conic-gradient(var(--swatch) 0% 25%, #454550 0% 50%) 0 0 / 100% 100%; }
+.rangeSwatch.active { border-color: var(--dv-color-clarette-accent, #b39af4); box-shadow: 0 0 0 2px rgba(179, 154, 244, 0.35); }
+.eyedropperButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  min-height: 0;
+  border-radius: 8px;
+  color: var(--dv-color-clarette-muted, #b1b4c8);
+}
+.eyedropperButton svg { width: 17px; height: 17px; }
+.eyedropperButton.active { background: rgba(179, 154, 244, 0.22); border-color: var(--dv-color-clarette-accent, #b39af4); color: var(--dv-color-clarette-text, #f2f1f7); }
+
+/* The Hue slider's track shows the actual hue wheel it rotates through, so
+ * dragging it previews where you're headed instead of reading a bare
+ * gray bar + number. */
+.hueSpectrumRow input[type=range] {
+  background: linear-gradient(to right, red 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, red 100%) !important;
+  height: 8px !important;
+  border-radius: 4px;
+}
+.hueSpectrumRow input[type=range]::-webkit-slider-runnable-track { background: transparent !important; }
+.hueSpectrumRow { padding-bottom: 10px; }
+.hueInputWrap { position: relative; }
+.hueBrackets { position: absolute; left: 0; right: 0; bottom: -8px; height: 8px; pointer-events: none; }
+.hueBracket {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 8px;
+  background: var(--dv-color-clarette-text, #f2f1f7);
+  transform: translateX(-1px);
+}
+.hueBracket::before { content: ''; position: absolute; top: -3px; left: -3px; width: 8px; height: 3px; border-top: 2px solid currentColor; }
+.hueBracketReference { opacity: 0.55; }

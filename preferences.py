@@ -1,5 +1,6 @@
 """Validated preferences, portable workspaces and protected output presets."""
 import copy
+import json
 import math
 from pathlib import Path
 
@@ -12,14 +13,18 @@ BUILTINS = {
     'website': dict(label='Website Profile', width=1200, height=1200, dpi=72, headW=.48, headTop=.08),
     'print': dict(label='Print Headshot', width=2400, height=3000, dpi=300, headW=.48, headTop=.08),
 }
-PANELS = ['portraits', 'preview', 'adjustments']
-WORKSPACES = {
-    'landscape': dict(name='Landscape Mode', orientation='horizontal', order=PANELS, sizes=[250, 700, 350], locked=False),
-    'portrait': dict(name='Portrait Mode', orientation='nested', order=['preview', 'portraits', 'adjustments'], sizes=[600, 340, 340], locked=False),
-}
+PANELS = ['portraits', 'preview', 'outputSize', 'color', 'detailMask']
+# Dockview-based workspace (schema 2). Layouts are opaque `DockviewApi.toJSON()`
+# blobs built and interpreted entirely on the frontend (see web/dockview-workspace.js);
+# Python only guards their shape/size and which panel ids they may reference. The five
+# built-in presets are *not* stored here -- they're computed from code in JS -- so they
+# stay protected simply by never being persisted; a live edit while one is active forks
+# it into a new `custom` entry instead of mutating the preset.
+WORKSPACE_PRESETS = ['landscape', 'portrait']
+MAX_LAYOUT_BYTES = 200_000
 
 def defaults():
-    return dict(final_folder=str(Path.home()/'Documents/Clarette/Final Output'), model='birefnet-general-lite',
+    return dict(final_folder=str(Path.home()/'Documents/Clarette/Final Output'), model='birefnet-general',
                 quality_cutout=True, notifications=True, notification_sound=False, voice_commands=False, show_panel_names=True,
                 upscale_method='fast', accelerate=True, auto_guide=True, preview_color=True, face_restore=False,
                 masking_enabled=True, solid_preview=False, preview_background='#00a84f', checker_brightness=35,
@@ -38,7 +43,7 @@ def validate_settings(values, previous=None):
         if type(default) is bool and type(value) is not bool: raise ValueError('Invalid '+key)
         if type(default) is str and (not isinstance(value,str) or len(value)>4096): raise ValueError('Invalid '+key)
         result[key]=copy.deepcopy(value)
-    for key,options in {'model':['birefnet-general-lite','birefnet-general','birefnet-portrait','u2netp'],
+    for key,options in {'model':['birefnet-general','birefnet-portrait','u2netp'],
                         'upscale_method':['neural','fast'], 'cutout_format':['PNG','TIFF'],
                         'photo_format':['JPEG','PNG','TIFF'], 'tiff_compression':['raw','tiff_lzw','tiff_adobe_deflate'],
                         'metadata_mode':['preserve','copyright','strip'],
@@ -54,18 +59,79 @@ def validate_settings(values, previous=None):
     if not isinstance(result['toolbar_apps'],list) or any(x not in ('photoshop','affinity','photos') for x in result['toolbar_apps']): raise ValueError('Invalid external application')
     return result
 
-def validate_workspace(value):
-    if not isinstance(value,dict) or sorted(value.get('order',[]))!=sorted(PANELS): raise ValueError('A workspace must contain each panel once')
-    if value.get('orientation') not in ('horizontal','vertical','nested'): raise ValueError('Invalid workspace orientation')
-    sizes=value.get('sizes',[])
-    if len(sizes)!=3 or any(type(x) not in (int,float) or not math.isfinite(x) or not 160<=x<=5000 for x in sizes): raise ValueError('Invalid panel sizes')
-    name=str(value.get('name','')).strip()
-    if not name or len(name)>80: raise ValueError('Enter a workspace name under 80 characters')
-    divider=value.get('divider_size',5)
-    if type(divider) not in (int,float) or not 3<=divider<=20:raise ValueError('Invalid divider size')
-    visible=value.get('visible',{})
-    if not isinstance(visible,dict):raise ValueError('Invalid panel visibility')
-    return dict(name=name,orientation=value['orientation'],order=list(value['order']),sizes=list(sizes),locked=bool(value.get('locked',False)),divider_size=3,show_dividers=bool(value.get('show_dividers',True)),visible={p:True if p=='preview' else bool(visible.get(p,True)) for p in PANELS})
+def validate_dockview_layout(value):
+    """A shallow, defensive check of a `DockviewApi.toJSON()` blob.
+
+    This never has to be an exhaustive schema for dockview's internal grid
+    tree -- the frontend wraps `fromJSON()` in its own try/catch and falls
+    back to the default preset on any exception. This just bounds payload
+    size and confirms every referenced panel id is one Clarette still knows
+    about, so a stale/edited session.json can't reference removed panels or
+    balloon storage.
+    """
+    if not isinstance(value,dict): raise ValueError('Invalid workspace layout')
+    if len(json.dumps(value))>MAX_LAYOUT_BYTES: raise ValueError('Workspace layout is too large')
+    grid=value.get('grid')
+    if not isinstance(grid,dict) or not isinstance(grid.get('root'),dict): raise ValueError('Invalid workspace layout grid')
+    panels=value.get('panels')
+    if not isinstance(panels,dict): raise ValueError('Invalid workspace layout panels')
+    for panel_id in panels:
+        if panel_id not in PANELS: raise ValueError('Unknown panel: '+str(panel_id))
+    return copy.deepcopy(value)
+
+def default_workspace2():
+    return dict(schema=2,active='landscape',locked=False,custom={})
+
+def validate_workspace2(value):
+    """Strict validation: raises if `value` itself isn't a well-formed workspace record."""
+    if not isinstance(value,dict): raise ValueError('Workspace must be an object')
+    custom={}
+    raw_custom=value.get('custom',{})
+    if not isinstance(raw_custom,dict): raise ValueError('Invalid custom workspaces')
+    for key,item in raw_custom.items():
+        if not isinstance(key,str) or not key or len(key)>100 or key in WORKSPACE_PRESETS: raise ValueError('Invalid workspace id')
+        if not isinstance(item,dict): raise ValueError('Invalid workspace record')
+        name=str(item.get('name','')).strip()
+        if not name or len(name)>80: raise ValueError('Enter a workspace name under 80 characters')
+        layout=validate_dockview_layout(item.get('layout'))
+        based_on=item.get('basedOn')
+        if based_on is not None and based_on not in WORKSPACE_PRESETS: based_on=None
+        custom[key]=dict(name=name,layout=layout,basedOn=based_on)
+    active=value.get('active')
+    if not isinstance(active,str) or (active not in WORKSPACE_PRESETS and active not in custom): raise ValueError('Invalid active workspace')
+    return dict(schema=2,active=active,locked=bool(value.get('locked',False)),custom=custom)
+
+def recover_workspace2(value):
+    """Preserve valid customized workspace layouts; fall back to the default preset otherwise.
+
+    Unlike `validate_workspace2`, this tolerates and drops individually-invalid
+    custom entries (a corrupted/edited session.json) rather than discarding the
+    whole record, matching `recover_settings`/`recover_preset`'s "keep what's
+    still valid" behaviour.
+    """
+    if value is None: return default_workspace2(),False
+    if not isinstance(value,dict): return default_workspace2(),True
+    repaired=False
+    custom={}
+    raw_custom=value.get('custom',{})
+    if isinstance(raw_custom,dict):
+        for key,item in raw_custom.items():
+            try:
+                if not isinstance(key,str) or not key or len(key)>100 or key in WORKSPACE_PRESETS: raise ValueError()
+                if not isinstance(item,dict): raise ValueError()
+                name=str(item.get('name','')).strip()
+                if not name or len(name)>80: raise ValueError()
+                layout=validate_dockview_layout(item.get('layout'))
+                based_on=item.get('basedOn')
+                if based_on is not None and based_on not in WORKSPACE_PRESETS: based_on=None
+                custom[key]=dict(name=name,layout=layout,basedOn=based_on)
+            except (TypeError,ValueError,OverflowError): repaired=True
+    else: repaired=True
+    active=value.get('active')
+    if not isinstance(active,str) or (active not in WORKSPACE_PRESETS and active not in custom): active='landscape';repaired=True
+    locked=value.get('locked',False)
+    if type(locked) is not bool: locked=bool(locked);repaired=True
+    return dict(schema=2,active=active,locked=locked,custom=custom),repaired
 
 def recover_settings(value):
     """Keep individually valid preferences from an untrusted saved session."""
@@ -120,22 +186,10 @@ def recover_preset(value,max_pixels):
         result.pop('preset_id',None);repaired=True
     return result,repaired
 
-def recover_workspaces(value):
-    """Preserve valid customized workspaces while restoring protected defaults."""
-    result=copy.deepcopy(WORKSPACES);repaired=value is not None and not isinstance(value,dict)
-    if value is None:return result,repaired
-    if not isinstance(value,dict):return result,True
-    for key,item in value.items():
-        try:
-            if not isinstance(key,str) or not key or len(key)>100:raise ValueError()
-            result[key]=validate_workspace(item)
-        except (TypeError,ValueError,OverflowError):repaired=True
-    return result,repaired
-
 def portable(state):
     # An allowlist, never a blacklist: provider status, credentials and sessions cannot escape.
     settings={k:copy.deepcopy(state['settings'].get(k,v)) for k,v in defaults().items()}
     for key in ('final_folder','print_profile','restore_location','hypir_location','osediff_location','flowsr_location','seesr_location'): settings.pop(key,None)
-    return dict(format='clarette-preferences',version=1,settings=settings,
-                workspaces=copy.deepcopy(state.get('workspaces',WORKSPACES)),
+    return dict(format='clarette-preferences',version=2,settings=settings,
+                workspace2=copy.deepcopy(state.get('workspace2',default_workspace2())),
                 presets=copy.deepcopy(state['presets']),shortcuts=copy.deepcopy(state.get('shortcuts',{})))

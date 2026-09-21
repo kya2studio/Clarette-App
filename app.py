@@ -16,14 +16,14 @@ from support import support_dir
 DATA=support_dir()
 DATA.mkdir(parents=True,exist_ok=True)
 MODELS=Path(os.environ.get('CLARETTE_MODELS',str(DATA/'models'))).expanduser();STATE=DATA/'session.json';TOKEN=secrets.token_urlsafe(32)
-LOCK=threading.RLock();JOBS={};WINDOW=None;SERVER=None
+LOCK=threading.RLock();JOBS={};WINDOW=None;SERVER=None;PENDING_UPDATE=None
 from release import VERSION, BUILD
 import preferences, storage, actions
 CACHE=storage.cache_dir(DATA)
 PRESETS=copy.deepcopy(preferences.BUILTINS)
 PROMPT='Enhance this headshot conservatively. Preserve the exact identity, facial proportions, expression, age, skin texture, hairline, hairstyle, clothing, hats and accessories. Improve clarity and compression artifacts without inventing facial details, teeth or eyes. If the source is small, upscale it before gentle enhancement. Keep the composition and aspect ratio unchanged. Do not beautify, change features, crop or remove the background. Return one high-resolution image.'
 
-def fresh():return dict(version=VERSION,build=BUILD,active=None,batches={},settings=preferences.defaults(),presets=copy.deepcopy(PRESETS),workspaces=copy.deepcopy(preferences.WORKSPACES),workspace='landscape',shortcuts={})
+def fresh():return dict(version=VERSION,build=BUILD,active=None,batches={},settings=preferences.defaults(),presets=copy.deepcopy(PRESETS),workspace2=preferences.default_workspace2(),shortcuts={})
 
 def _backup_session():
     if not STATE.is_file():return False,None
@@ -168,9 +168,7 @@ def _recover_session(value):
     else:repaired=True
     state['batches']=batches;active=value.get('active');active_valid=isinstance(active,str) and active in batches;state['active']=active if active_valid else None
     if active is not None and not active_valid:repaired=True
-    state['workspaces'],changed=preferences.recover_workspaces(value.get('workspaces'));repaired|=changed
-    workspace=value.get('workspace','landscape');workspace_valid=isinstance(workspace,str) and workspace in state['workspaces'];state['workspace']=workspace if workspace_valid else 'landscape'
-    if not workspace_valid:repaired=True
+    state['workspace2'],changed=preferences.recover_workspace2(value.get('workspace2'));repaired|=changed
     raw_shortcuts=value.get('shortcuts',{})
     try:
         from shortcuts import validate
@@ -287,7 +285,7 @@ def state(settings_only=False):
         out['provider_models']=copy.deepcopy(cloud.COMPATIBLE);out['engines']=statuses(S['settings'],MODELS);out['hypir_available']=out['engines']['hypir']['status']=='Ready'
         import native
         out['external_apps']=native.available_apps()
-        out['jobs']=list(copy.deepcopy(JOBS).values());return out
+        out['jobs']=list(copy.deepcopy(JOBS).values());out['pending_update']=copy.deepcopy(PENDING_UPDATE);return out
 
 def notify(message):
     if platform.system()!='Darwin' or not WINDOW:return
@@ -446,7 +444,7 @@ def thumbnail(path,stamp):
 def action(path,d):
     if path in ('/api/mask-detect','/api/mask-paint','/api/mask-apply','/api/refine-edges','/api/apply-cutouts') and not S['settings'].get('masking_enabled',True):raise ValueError('Enable Mask first')
     # Native dialogs/network calls must not hold the image state lock.
-    if path in ('/api/choose-path','/api/save-document','/api/provider-models','/api/window','/api/close-window','/api/quit','/api/cancel','/api/storage'):
+    if path in ('/api/choose-path','/api/save-document','/api/provider-models','/api/window','/api/close-window','/api/quit','/api/cancel','/api/storage','/api/check-updates','/api/apply-update'):
         result=actions.handle(sys.modules[__name__],path,d)
     else:
         with LOCK:result=actions.handle(sys.modules[__name__],path,d)
@@ -534,11 +532,11 @@ def action(path,d):
         return {'ok':True}
     if path=='/api/settings':
         if 'upscale_method' in d and d['upscale_method'] not in ('neural','fast','hypir'):raise ValueError('Unknown enhancement method')
-        if 'model' in d and d['model'] not in ('birefnet-general-lite','birefnet-general','birefnet-portrait','u2netp'):raise ValueError('Unknown cutout model')
+        if 'model' in d and d['model'] not in ('birefnet-general','birefnet-portrait','u2netp'):raise ValueError('Unknown cutout model')
         with LOCK:
             for key in ('final_folder','model','notifications','notification_sound','voice_commands','upscale_method','quality_cutout','accelerate','auto_guide','openai_model','gemini_model'):
                 if key in d:S['settings'][key]=d[key]
-            if S['settings']['model'] not in ('birefnet-general-lite','birefnet-general','birefnet-portrait','u2netp'):raise ValueError('Unknown cutout model')
+            if S['settings']['model'] not in ('birefnet-general','birefnet-portrait','u2netp'):raise ValueError('Unknown cutout model')
             if S['settings'].get('upscale_method') not in ('neural','fast','hypir'):raise ValueError('Unknown enhancement method')
             save()
         return {'ok':True}
@@ -670,10 +668,19 @@ def action(path,d):
             else:raise ValueError('Unknown action')
         subprocess.Popen(cmd);return {'ok':True}
     if path=='/api/quit':
-        request_shutdown()
-        if WINDOW:threading.Thread(target=WINDOW.destroy,daemon=True).start()
-        elif SERVER:threading.Thread(target=SERVER.shutdown,daemon=True).start()
-        return {'ok':True}
+        _quit_app();return {'ok':True}
+    if path=='/api/check-updates':
+        import updates
+        return updates.check()
+    if path=='/api/apply-update':
+        import updates
+        def run(report):
+            report('Downloading update…')
+            updates.apply(d.get('asset_url'),d.get('asset_name'),report)
+            report('Installing… Clarette will restart.')
+            _quit_app()
+            return {'installing':True}
+        return start_job('Update',run)
     with LOCK:
         batch,f=getfile(d)
         if path=='/api/edit':
@@ -931,6 +938,25 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             traceback.print_exc();return self.send({'error':str(e)},400)
 
+def _check_update_later():
+    # A few seconds after launch, not blocking startup; only in the packaged
+    # build (a dev checkout has no bundle for the frontend's "install" flow
+    # to replace anyway). Silent about failures -- a flaky network check
+    # should never surface as an error the user didn't ask for.
+    global PENDING_UPDATE
+    import updates
+    if not updates.is_packaged():return
+    time.sleep(3)
+    try:
+        result=updates.check()
+        if result.get('available'):PENDING_UPDATE=result
+    except Exception:traceback.print_exc()
+
+def _quit_app():
+    request_shutdown()
+    if WINDOW:threading.Thread(target=WINDOW.destroy,daemon=True).start()
+    elif SERVER:threading.Thread(target=SERVER.shutdown,daemon=True).start()
+
 def request_shutdown():
     # Cancellation is signalled without waiting for a busy image operation's lock.
     ENGINE.stop_requested.set()
@@ -957,6 +983,7 @@ def main():
     SERVER=ReuseServer((args.host,args.port),Handler);url=f'http://127.0.0.1:{args.port}'
     from voice_actions import publish_connection
     publish_connection(DATA,url,TOKEN)
+    threading.Thread(target=_check_update_later,daemon=True).start()
     if args.native:
         import webview
         threading.Thread(target=SERVER.serve_forever,daemon=True).start()

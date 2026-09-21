@@ -23,10 +23,12 @@ for(const dialog of document.querySelectorAll('dialog')){
 
 })();
 
-// Progress and completion share one notification surface at the top of Preview.
+// Progress and completion share one notification surface, centered in the
+// top toolbar rather than floating over Preview -- visible regardless of
+// which panel is docked where.
 (()=>{
  const stack=document.createElement('div');stack.id='notificationStack';stack.setAttribute('aria-live','polite');
- document.querySelector('.editor').append(stack);stack.append($('jobbar'),$('toast'));
+ document.querySelector('.topbar').append(stack);stack.append($('jobbar'),$('toast'));
  let notes=[];
  function paint(){const toast=$('toast');toast.replaceChildren();for(const note of notes){const row=document.createElement('div');row.className=note.error?'notice error':'notice';row.textContent=note.text;toast.append(row)}toast.hidden=!notes.length||busy;stack.hidden=$('jobbar').hidden&&toast.hidden}
  message=function(text,error=false){const note={text,error};notes=notes.filter(n=>n.text!==text);notes.push(note);notes=notes.slice(-3);paint();setTimeout(()=>{notes=notes.filter(n=>n!==note);paint()},error?7000:2600)};
