@@ -72,6 +72,8 @@ eyedropper.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18
 const header = document.createElement('div');
 header.className = 'selectiveColorHeader';
 header.append(swatches, eyedropper);
+// resetColor (Hue/Saturation Reset) is created and wired up further down,
+// then moved here next to the Eyedropper -- see below.
 
 hueRow.classList.add('hueSpectrumRow');
 // A wrapper around just the input, not a bare extra grid child: .sliderRow's
@@ -113,10 +115,11 @@ colorSection.append(selective);
 
 // Apply Color commits every pending edit in this panel, curves through
 // Tint -- keeping it above the selective-color controls read as "this only
-// covers what's above me". Moving .colorActions (its status text travels
-// with it) after .selective puts it back at the true bottom, following
-// everything it actually applies.
-//
+// covers what's above me". Moving .colorActions after .selective puts it
+// back at the true bottom, following everything it actually applies.
+const colorActions = document.querySelector('.colorActions');
+colorSection.append(colorActions);
+
 // resetColor belongs to *this* section specifically, not the panel as a
 // whole -- app.js's original handler ("discard draft, revert to last
 // applied") reverted every field, duplicating neutralColor/#autoColor's
@@ -126,8 +129,10 @@ colorSection.append(selective);
 // selected -- is what actually makes it a *different* control instead of
 // a second copy of the same one; overridden here (not in app.js) since it
 // needs this closure's selectedRange/syncColorRanges to reset the range
-// selector state too, not just the numbers.
-const colorActions = document.querySelector('.colorActions');
+// selector state too, not just the numbers. Placed in the header right
+// next to the Eyedropper -- both are range-selection tools (one picks a
+// range by sampling, this clears it) -- rather than at the bottom next to
+// Apply Color, which is about committing the edit, not selecting a range.
 const resetColor = $('resetColor');
 resetColor.textContent = '';
 resetColor.innerHTML = phosphor['arrow-counter-clockwise'];
@@ -145,8 +150,7 @@ resetColor.onclick = () => {
   updatePreview();
   schedule();
 };
-colorActions.prepend(resetColor);
-colorSection.append(colorActions);
+header.append(resetColor);
 
 // Exposure and Grain: new global (Master-only, like White balance) adjustments,
 // alongside the existing White balance/Shadows/Highlights group layout.js

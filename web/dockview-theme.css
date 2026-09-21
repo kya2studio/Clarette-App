@@ -277,35 +277,137 @@
 }
 #notificationStack #jobbar, #notificationStack #toast { pointer-events: auto; }
 
-/* Default (vertical list) card: the trash button was `position:absolute`,
- * pinned a fixed offset up from the row's bottom-right corner -- fine as
- * long as the name/dimensions text stayed within its assumed line count,
- * but a longer or differently-wrapping name (a 2nd "Original: N x" / "M px"
- * line, e.g.) grows the row underneath a button that doesn't know to move,
- * so it ends up overlapping instead of sitting in the corner. Making the
- * button a normal flex sibling instead of an absolutely-positioned overlay
- * means there's always room reserved for it, whatever the text does. */
-.batch .portraitRow {
+/* --- Portraits list: small uniform cards, one horizontally-scrolling row --- */
+/* Every orientation used to get a *different* card layout (a wrapping grid
+ * of wide horizontal cards when short-and-wide, a single column of the
+ * same wide cards when narrow-and-tall) -- both still let the list grow
+ * downward as more portraits were added, and the wide card itself was
+ * wider than it needed to be. One design now, regardless of how the panel
+ * is docked: small fixed-size cards that only ever add sideways, never
+ * wrap to a new row -- .queue is the horizontal scroller (native trackpad/
+ * scrollbar drag), with a wheel-delta forward in reference-layout.js
+ * remapping a plain vertical mouse wheel to it while the pointer is over
+ * the list. */
+
+/* .batch (Portraits) is used directly as its own Dockview panel body -- no
+ * extra `.dockPanelBody` wrapper -- since it already manages its own
+ * internal header/scroll-region/footer layout (.batchbar / .queue /
+ * .batchFoot) and adding an outer scrolling+padded wrapper would break
+ * that pinned-header/pinned-footer structure. */
+.batch {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.batch .queue {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  overflow-x: auto;
+  /* auto, not hidden: normally there's exactly one row (no vertical
+   * scrollbar ever appears) since every card is a fixed 104px tall, but
+   * if the panel is ever dragged shorter than that plus the
+   * batchbar/batchFoot chrome around it, this is what lets the card stay
+   * fully reachable by scrolling instead of just clipping it. */
+  overflow-y: auto;
   gap: 8px;
+  padding: 3px 8px;
+}
+.batch .portraitRow {
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: stretch;
+  width: 106px;
+  /* Short enough to still fit a *short* filmstrip panel (e.g. Landscape
+   * Mode's default Portraits bar, which renders out to a ~96px-tall queue
+   * once the batchbar/batchFoot chrome above and below it -- and the
+   * queue's own padding -- are accounted for) in a single row without any
+   * vertical clipping or scrolling. */
+  height: 90px;
+  gap: 0;
+  overflow: hidden;
   border: 1px solid transparent;
   border-radius: 7px;
 }
-.batch .portraitRow > .queueItem { flex: 1; min-width: 0; }
-.batch .portraitTrash {
-  position: static;
-  flex: none;
-  margin: 0 4px 0 0;
+.batch .portraitRow > .queueItem {
+  flex-direction: column;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  /* v1.css's compact-toolbar pass !important's gap/padding here too. */
+  gap: 0 !important;
+  padding: 0 !important;
+  min-height: 0;
+  height: auto;
 }
+.batch .portraitRow > .queueItem img {
+  /* v1.css's compact-toolbar pass hard-codes 62x72 with !important. */
+  width: 100% !important;
+  height: 36px !important;
+  flex: none;
+  border-radius: 6px 6px 0 0;
+}
+.batch .queueItem strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.batch .portraitRow .qText {
+  /* Same vintage: 30px of right padding reserved for a trash button that
+   * used to float on top of this text absolutely-positioned -- long gone
+   * now that .portraitTrash is its own row below, but still !important'd. */
+  padding: 2px 6px 0 !important;
+  align-self: stretch;
+  /* Name gets its own full-width row; dimensions and status share the row
+   * below it (each ellipsizing on its own if the pair doesn't fit) rather
+   * than each getting a separate line -- the height budget above has no
+   * room for 3 stacked text lines plus the thumbnail and trash row. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 5px;
+  line-height: 1.25;
+}
+.batch .portraitRow .qText strong,
+.batch .portraitRow .qText .originalDimensions,
+.batch .portraitRow .qText em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+}
+.batch .portraitRow .qText strong { flex: 1 0 100%; font-size: 9px; }
+.batch .portraitRow .qText .originalDimensions { flex: 0 1 auto; min-width: 0; font-size: 8px; }
+/* .queueItem em{font-size:12px!important} in v1.css's compact pass. */
+.batch .portraitRow .qText em { flex: 0 0 auto; font-size: 8px !important; }
+/* Trash gets its own bottom strip -- never overlapping the thumbnail
+ * above or the name/dimensions/status text, which each already have their
+ * own row -- and is what the lilac ".active" selection box (below) needs
+ * to actually enclose, not just the thumbnail+text above it. */
+.batch .portraitRow .portraitTrash {
+  /* v1.css's base .portraitTrash is position:absolute (a leftover from
+   * before it became a normal flex-flow sibling) -- align-self has no
+   * effect on an absolutely-positioned box, so this has to explicitly
+   * put it back in flow first. */
+  position: static;
+  align-self: flex-end;
+  margin: 0 3px 1px 0;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.batch .portraitRow .portraitTrash svg { width: 10px; height: 10px; }
 /* The lilac ".active" selection highlight is a generic, !important-ed rule
  * shared by several unrelated buttons across the app (curve tabs, before/
  * cutoutToggle, ...) -- reused here rather than duplicated, but it paints
- * onto .queueItem itself, which stops at the trash button's left edge since
- * that button is .queueItem's flex *sibling*, not something nestable inside
- * it (both are <button>s already). Moving the highlight onto their shared
- * parent .portraitRow -- and suppressing it on .queueItem so it doesn't
- * double up -- draws one box that encloses both, trash included. */
+ * onto .queueItem itself, which stops short of the trash button below
+ * since that's .queueItem's flex *sibling* inside .portraitRow, not
+ * something nestable inside it (both are <button>s already). Moving the
+ * highlight onto their shared parent .portraitRow -- and suppressing it on
+ * .queueItem so it doesn't double up -- draws one box that encloses both,
+ * trash included. */
 .batch .portraitRow:has(> .queueItem.active) {
   background: #52446f66;
   border-color: #bca1ff;
@@ -313,134 +415,6 @@
 .batch .portraitRow > .queueItem.active {
   background: none !important;
   border-color: transparent !important;
-}
-
-/* --- Responsive Portraits: horizontal filmstrip vs vertical list ---------- */
-/* Driven by the *panel's own* box via a CSS container query -- not window
- * width -- so it reflows correctly no matter where it's docked. A single
- * aspect-ratio breakpoint (rather than width alone) avoids flapping between
- * layouts as a panel is dragged through in-between sizes. */
-
-/* .batch (Portraits) and .editor (Preview) are used directly as their own
- * Dockview panel bodies -- no extra `.dockPanelBody` wrapper -- since both
- * already manage their own internal header/scroll-region/footer layout
- * (.batchbar / .queue / .batchFoot) and adding an outer scrolling+padded
- * wrapper would break that pinned-header/pinned-footer structure. */
-.batch {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  container-type: size;
-  container-name: portraits;
-}
-.batch .queueItem strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
-
-/* Wide-and-short (mockup 3): the same horizontal card as the vertical list
- * (image left, text/status middle, trash on the right -- never redrawn into
- * a separate top-image/bottom-text mini-card, which was cramming that same
- * content into a much narrower box and forcing the trash button to overlap
- * the wrapped dimensions/status text below it) just laid out several per
- * row instead of one-per-row, so a short panel still uses its width
- * instead of scrolling a single column. Gated on aspect ratio (not width
- * alone) so a panel that's merely wide but still tall -- e.g. spanning a
- * full-height column -- stays a single column; only a panel that's
- * actually short-and-wide switches. The single breakpoint (no separate
- * enter/exit thresholds) is deliberate: a container query only re-evaluates
- * on an actual box-size change, so there's no repeated-callback jitter to
- * dampen the way a JS ResizeObserver would need. */
-@container portraits (min-aspect-ratio: 3/2) {
-  .batch .queue { display: flex; flex-direction: row; flex-wrap: wrap; align-content: flex-start; gap: 10px; padding: 4px 6px 10px; }
-  .batch .portraitRow { flex: 0 1 260px; }
-}
-
-/* Narrow-and-tall ("sideways", e.g. Portrait Mode's Portraits sidebar):
- * small, uniform, fixed-size cards in a single horizontally-scrolling row
- * instead of one full-width card per line -- a tall stack of big cards left
- * almost the whole sidebar unused after 2-3 portraits. Every card is the
- * same width and height regardless of name length (filename/dimensions
- * both ellipsize to one line rather than wrapping, which is what makes a
- * *fixed* height safe here), and the row never wraps to a second line --
- * .queue itself is the horizontal scroller (native trackpad/scrollbar
- * drag), with a wheel-delta forward in reference-layout.js remapping a
- * plain vertical mouse wheel to it while the pointer is over the list. */
-@container portraits (max-aspect-ratio: 1.49) {
-  .batch .queue {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: flex-start;
-    overflow-x: auto;
-    /* auto, not hidden: normally there's exactly one row (no vertical
-     * scrollbar ever appears) since every card is a fixed 150px tall, but
-     * if the panel is ever dragged shorter than that plus the
-     * batchbar/batchFoot chrome around it, this is what lets the card
-     * stay fully reachable by scrolling instead of just clipping it. */
-    overflow-y: auto;
-    gap: 8px;
-    padding: 8px;
-  }
-  .batch .portraitRow {
-    flex: 0 0 auto;
-    flex-direction: column;
-    align-items: stretch;
-    width: 118px;
-    height: 150px;
-    gap: 0;
-    overflow: hidden;
-  }
-  .batch .portraitRow > .queueItem {
-    flex-direction: column;
-    align-items: stretch;
-    /* v1.css's compact-toolbar pass !important's gap/padding here too. */
-    gap: 0 !important;
-    padding: 0 !important;
-    min-height: 0;
-    height: auto;
-  }
-  .batch .portraitRow > .queueItem img {
-    /* v1.css's compact-toolbar pass hard-codes 62x72 with !important,
-     * predating this mode -- matched in specificity+!important here. */
-    width: 100% !important;
-    height: 70px !important;
-    flex: none;
-    border-radius: 6px 6px 0 0;
-  }
-  .batch .portraitRow .qText {
-    /* Same vintage: 30px of right padding reserved for a trash button that
-     * used to float on top of this text absolutely-positioned -- long gone
-     * now that .portraitTrash is its own row below, but still !important'd. */
-    padding: 6px 7px 4px !important;
-    align-self: stretch;
-  }
-  .batch .portraitRow .qText strong,
-  .batch .portraitRow .qText .originalDimensions,
-  .batch .portraitRow .qText em {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    margin: 0;
-  }
-  .batch .portraitRow .qText strong { font-size: 11px; }
-  .batch .portraitRow .qText .originalDimensions { font-size: 9px; margin-top: 2px; }
-  /* .queueItem em{font-size:12px!important} in v1.css's compact pass. */
-  .batch .portraitRow .qText em { font-size: 9px !important; margin-top: 2px; }
-  /* Trash gets its own bottom strip -- never overlapping the thumbnail
-   * above or the name/dimensions/status text, which each already have
-   * their own row. */
-  .batch .portraitRow .portraitTrash {
-    align-self: flex-end;
-    margin: 0 4px 4px 0;
-    width: 20px;
-    height: 20px;
-    min-height: 0;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .batch .portraitRow .portraitTrash svg { width: 13px; height: 13px; }
 }
 
 /* --- Responsive tool panels (Output Size, Color, Detail, Mask) ------------ */
