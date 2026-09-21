@@ -144,21 +144,25 @@ def install(app,url):
     _target=MenuTarget.alloc().init()
     def build():
         global _title_label
-        from shortcuts import DEFAULTS
-        shortcuts={**DEFAULTS,**app.S.get('shortcuts',{})}
         main=A.NSMenu.alloc().init()
         def menu(title):
             top=A.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title,None,'');sub=A.NSMenu.alloc().initWithTitle_(title);top.setSubmenu_(sub);main.addItem_(top);return sub
         def item(m,title,command=None,selector=None,key='',symbol=None):
             if title=='-':m.addItem_(A.NSMenuItem.separatorItem());return
-            shortcut=shortcuts.get(command,'')
-            # Single-letter tools belong to the contextual editor, never global menus.
+            # command-routed items (performCommand: -> dispatch() -> evaluate_js
+            # 'window.claretteCommand(...)') must NOT also carry a live AppKit key
+            # equivalent for that same shortcut: commands.js's own keydown listener
+            # in the webview already matches the identical shortcut and calls
+            # claretteCommand directly, so a real key equivalent here doesn't
+            # replace that path, it races it -- both firing for one keypress,
+            # each starting its own job and posting its own completion
+            # notification (the "duplicate notification" bug). The menu item
+            # stays fully clickable either way; it just no longer duplicates the
+            # keyboard path. Only explicit selector= items (Cut/Copy/Paste/Hide/
+            # Quit, real one-off AppKit actions with no JS-side listener) still
+            # get a live key equivalent, via their own literal key= argument.
             mods=A.NSCommandKeyMask
-            if shortcut.startswith('Meta+'):
-                key=shortcut.split('+')[-1]
-                if 'Shift+' in shortcut:mods|=A.NSShiftKeyMask
-                if key=='Backspace':key='\x08'
-            entry=A.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title,selector or 'performCommand:',key)
+            entry=A.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title,selector or 'performCommand:',key if selector else '')
             entry.setKeyEquivalentModifierMask_(mods)
             if command:entry.setTarget_(_target);entry.setRepresentedObject_(command)
             if symbol and hasattr(A.NSImage,'imageWithSystemSymbolName_accessibilityDescription_'):

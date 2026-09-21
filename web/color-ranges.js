@@ -12,6 +12,22 @@
 (() => {
 'use strict';
 
+// Global Reset (neutralColor)/Preview (previewColor)/Auto Color sat in
+// their own header strip above .curveTabs's "Curves / RGB R G B" row --
+// two separate lines for what's really one logical header, the second of
+// which was otherwise empty since its only other content (the "Color"
+// section label) is hidden. Moving them into .curveTabs itself, pinned
+// right via their own wrapper's margin-left:auto while "Curves" + the
+// channel tabs stay put on the left, merges that into the single row the
+// panel has width for; the now-empty strip above just collapses away.
+const curveTabs = document.querySelector('.curveTabs');
+const colorHeaderActions = document.querySelector('.colorHeaderActions');
+const curveTabsActions = document.createElement('div');
+curveTabsActions.className = 'curveTabsActions';
+curveTabsActions.append($('neutralColor'), $('previewColor'), $('autoColor'));
+curveTabs.append(curveTabsActions);
+colorHeaderActions.hidden = true;
+
 const RANGES = [
   ['master', 'Master', '#8a8a8a'],
   ['red', 'Red', '#e5484d'],
@@ -99,12 +115,37 @@ colorSection.append(selective);
 // Tint -- keeping it above the selective-color controls read as "this only
 // covers what's above me". Moving .colorActions (its status text travels
 // with it) after .selective puts it back at the true bottom, following
-// everything it actually applies. resetColor ("discard draft, revert to
-// last applied") was the one thing left stranded by removing the
-// now-pointless "Advanced color" popover it used to live in -- paired
-// alongside Apply Color is exactly where a "revert" action belongs anyway.
+// everything it actually applies.
+//
+// resetColor belongs to *this* section specifically, not the panel as a
+// whole -- app.js's original handler ("discard draft, revert to last
+// applied") reverted every field, duplicating neutralColor/#autoColor's
+// row at the top (the real global reset, wired to /api/color-reset
+// server-side). Scoping it down to just Hue/Saturation/Lightness --
+// Master's and every named range's, plus whichever range is currently
+// selected -- is what actually makes it a *different* control instead of
+// a second copy of the same one; overridden here (not in app.js) since it
+// needs this closure's selectedRange/syncColorRanges to reset the range
+// selector state too, not just the numbers.
 const colorActions = document.querySelector('.colorActions');
-colorActions.prepend($('resetColor'));
+const resetColor = $('resetColor');
+resetColor.textContent = '';
+resetColor.innerHTML = phosphor['arrow-counter-clockwise'];
+resetColor.title = 'Reset Hue/Saturation';
+resetColor.setAttribute('aria-label', 'Reset Hue/Saturation');
+resetColor.classList.add('compactIcon', 'filledIcon');
+resetColor.onclick = () => {
+  if (!current) return;
+  draft.hue = 0;
+  draft.saturation = 0;
+  draft.lightness = 0;
+  draft.color_ranges = {};
+  selectedRange = 'master';
+  syncColor();
+  updatePreview();
+  schedule();
+};
+colorActions.prepend(resetColor);
 colorSection.append(colorActions);
 
 // Exposure and Grain: new global (Master-only, like White balance) adjustments,
@@ -163,19 +204,88 @@ for (const key of ['hue', 'saturation', 'lightness']) {
 const previousSyncColor = syncColor;
 syncColor = function () { previousSyncColor(); syncColorRanges(); };
 
-// Eyedropper: click samples the rendered pixel under the pointer (what the
-// user actually sees, including everything already applied), converts to
-// HSV, and selects the nearest of the six named ranges (or Master if the
-// sample is close to gray/neutral, since no single hue owns a desaturated
-// pixel). Plain click replaces the selection; Cmd/Ctrl-click leaves a second
+// Eyedropper (Photoshop-style): click the icon to arm it, then every click
+// on Preview samples the rendered pixel under the pointer (what the user
+// actually sees, including everything already applied) and selects the
+// nearest of the six named ranges (or Master if the sample is close to
+// gray/neutral, since no single hue owns a desaturated pixel) -- without
+// disarming, so the next click can sample somewhere else right away. Only
+// Escape or clicking the icon again exits. Cmd/Ctrl-click leaves a second
 // reference bracket on the spectrum without changing which range is being
 // edited, for comparing two sampled colors at once.
 let sampling = false;
-eyedropper.onclick = () => {
-  sampling = !sampling;
-  eyedropper.classList.toggle('active', sampling);
-  $('mainCanvas').style.cursor = sampling ? 'crosshair' : '';
-};
+const canvas = $('mainCanvas');
+const viewport = document.querySelector('.viewport');
+
+// A plain CSS crosshair doesn't read as "this tool samples a color" the
+// way Photoshop's eyedropper glyph does -- reusing that same glyph (white
+// fill, dark outline so it stays visible on both light and dark image
+// content) as a custom cursor, hotspot at its drop-tip, makes the active
+// tool obvious without a separate mode indicator anywhere near the canvas.
+const EYEDROPPER_CURSOR = 'url("data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
+  '<path d="M18.5 2.5a3 3 0 0 1 0 4.24L17 8.24l-4.24-4.24 1.5-1.5a3 3 0 0 1 4.24 0zM11.76 5l4.24 4.24-9.5 9.5-4.5 1 1-4.5z" ' +
+  'fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/></svg>'
+) + '") 3 21, crosshair';
+
+// Live color-preview loupe: follows the pointer whenever sampling is armed,
+// offset to the upper-right so it never sits directly over the pixel about
+// to be sampled. Fixed positioning + a viewport-edge nudge (below) keeps it
+// fully visible even with the pointer near a window edge.
+const loupe = document.createElement('div');
+loupe.className = 'eyedropperLoupe';
+loupe.hidden = true;
+document.body.append(loupe);
+
+// Sampled-area highlight ring: a plain positioned overlay *inside* .viewport
+// (never drawn into #mainCanvas itself), so it can never end up in an
+// export or the mask -- it just marks where the last sample was taken,
+// until the tool is dismissed or a swatch is picked some other way.
+const sampleRing = document.createElement('div');
+sampleRing.className = 'eyedropperRing';
+sampleRing.hidden = true;
+viewport.append(sampleRing);
+function hideSampleRing() { sampleRing.hidden = true; }
+
+function startSampling() {
+  if (sampling) return;
+  sampling = true;
+  eyedropper.classList.add('active');
+  canvas.style.cursor = EYEDROPPER_CURSOR;
+}
+function stopSampling() {
+  if (!sampling) return;
+  sampling = false;
+  eyedropper.classList.remove('active');
+  canvas.style.cursor = '';
+  loupe.hidden = true;
+  hideSampleRing();
+}
+eyedropper.onclick = () => sampling ? stopSampling() : startSampling();
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && sampling) stopSampling(); });
+
+function samplePixel(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.round((clientX - rect.left) * (canvas.width / rect.width));
+  const y = Math.round((clientY - rect.top) * (canvas.height / rect.height));
+  if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return null;
+  const [r, g, b] = canvas.getContext('2d').getImageData(x, y, 1, 1).data;
+  return { r, g, b };
+}
+canvas.addEventListener('pointermove', e => {
+  if (!sampling) { return; }
+  const px = samplePixel(e.clientX, e.clientY);
+  if (!px) { loupe.hidden = true; return; }
+  loupe.hidden = false;
+  loupe.style.background = `rgb(${px.r}, ${px.g}, ${px.b})`;
+  let left = e.clientX + 18, top = e.clientY - 34;
+  if (left + 28 > window.innerWidth - 8) left = e.clientX - 46;
+  if (top < 8) top = e.clientY + 18;
+  loupe.style.left = left + 'px';
+  loupe.style.top = top + 'px';
+}, true);
+canvas.addEventListener('pointerleave', () => { loupe.hidden = true; });
+
 function nearestRange(r, g, b) {
   const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
   if (max === 0 || delta / max < 0.12) return null; // too gray/dark to belong to a hue range
@@ -189,16 +299,13 @@ function nearestRange(r, g, b) {
   }
   return best;
 }
-$('mainCanvas').addEventListener('pointerdown', (e) => {
-  if (!sampling || !current) return;
+canvas.addEventListener('pointerdown', (e) => {
+  if (!sampling || !current || e.button !== 0) return;
   e.preventDefault();
   e.stopImmediatePropagation();
-  const canvas = $('mainCanvas'), rect = canvas.getBoundingClientRect();
-  const x = Math.round((e.clientX - rect.left) * (canvas.width / rect.width));
-  const y = Math.round((e.clientY - rect.top) * (canvas.height / rect.height));
-  if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
-  const [r, g, b] = canvas.getContext('2d').getImageData(x, y, 1, 1).data;
-  const picked = nearestRange(r / 255, g / 255, b / 255);
+  const px = samplePixel(e.clientX, e.clientY);
+  if (!px) return;
+  const picked = nearestRange(px.r / 255, px.g / 255, px.b / 255);
   if (e.metaKey || e.ctrlKey) {
     if (picked) {
       const mark = document.createElement('div');
@@ -208,12 +315,21 @@ $('mainCanvas').addEventListener('pointerdown', (e) => {
     }
     return;
   }
+  // Hue/Saturation/Lightness for the newly-selected range stay exactly as
+  // they were (0 for a range never touched before, or whatever was set
+  // last time) -- sampling only *chooses* which range those controls now
+  // edit, it never writes into draft itself, so Hue/Saturation are still
+  // fully editable immediately after, live, without reactivating anything.
   selectedRange = picked || 'master';
   syncColorRanges();
-  sampling = false;
-  eyedropper.classList.remove('active');
-  canvas.style.cursor = '';
+  const vpRect = viewport.getBoundingClientRect();
+  sampleRing.style.left = (e.clientX - vpRect.left) + 'px';
+  sampleRing.style.top = (e.clientY - vpRect.top) + 'px';
+  sampleRing.hidden = false;
 }, true);
+// A swatch picked directly (not via sampling) no longer corresponds to
+// where the ring is pointing.
+swatches.addEventListener('click', hideSampleRing);
 
 syncColorRanges();
 })();

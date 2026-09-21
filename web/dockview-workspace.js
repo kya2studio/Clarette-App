@@ -18,6 +18,16 @@ const PANEL_CONSTRAINTS = {
   // raised versions of the originals to fit each tab's content without
   // scrolling at typical panel sizes, scroll is just the fallback for
   // anyone who drags a panel narrower/shorter still.
+  // Height can't go much above 200: Landscape's own filmstrip preset asks
+  // for a *short* 220px-tall Portraits bar (buildPreset() below), and
+  // dockview clamps that initialHeight up to whatever minimumHeight is set
+  // here -- raising this to comfortably clear the sideways/narrow
+  // orientation's fixed-height filmstrip cards (dockview-theme.css's
+  // max-aspect-ratio container query) would silently make every Landscape
+  // workspace's filmstrip taller than designed. That orientation's actual
+  // available height is the whole sidebar's height in practice (never
+  // realistically this constrained), and its own overflow-y:auto is the
+  // real safety net if it ever is -- scrolling, not clipping.
   portraits: { minimumWidth: 260, minimumHeight: 200 },
   preview: { minimumWidth: 400, minimumHeight: 320 },
   outputSize: { minimumWidth: 280, minimumHeight: 260 },

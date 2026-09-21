@@ -135,12 +135,22 @@
  * button, Preview's display-mode toggles), so the row shrinks to fit only
  * those instead of the fixed height sized for a now-absent heading. */
 .batch .batchbar { height: auto; min-height: 0; padding: 8px 18px; }
-.editor .editorHead { height: auto; min-height: 0; padding: 8px 18px; flex-wrap: wrap; }
-/* Wraps onto its own row after whatever controls are in the header (there may
- * be none visible), landing at the bottom of the header and right above the
- * vertical toolbar/canvas that follows -- exactly where the dimensions text
- * used to read before the heading itself moved up into the tab. */
-.editor .editorHead #canvasSizeBadge { flex: 1 0 100%; order: 99; margin-top: 2px; }
+.editor .editorHead { height: auto; min-height: 0; padding: 8px 18px; }
+/* Canvas-size text shares the header's one row with the display-mode icons
+ * (before/cutoutToggle/previewBackground in .previewHeaderActions) instead
+ * of wrapping onto a row of its own: the icons are a fixed-size group
+ * pinned right (.previewHeaderActions has flex:none + margin-left:auto
+ * already), so the badge just takes the remaining space on the left and
+ * ellipsizes instead of wrapping or pushing the icons off-row when the
+ * panel narrows -- nothing to clip since the icons never shrink. */
+.editor .editorHead #canvasSizeBadge {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Drag Panels off (Settings > Workspace) locks the workspace -- panels stay
  * usable but can't be dragged or moved, so these disappear along with that
  * ability instead of sitting there doing nothing. */
@@ -343,9 +353,95 @@
   .batch .queue { display: flex; flex-direction: row; flex-wrap: wrap; align-content: flex-start; gap: 10px; padding: 4px 6px 10px; }
   .batch .portraitRow { flex: 0 1 260px; }
 }
-/* Narrow-and-tall: vertical scrolling list (mockup 4) -- the unconditional
- * default above already does this; .queue's own overflow-y:auto (style.css)
- * supplies the scrolling. */
+
+/* Narrow-and-tall ("sideways", e.g. Portrait Mode's Portraits sidebar):
+ * small, uniform, fixed-size cards in a single horizontally-scrolling row
+ * instead of one full-width card per line -- a tall stack of big cards left
+ * almost the whole sidebar unused after 2-3 portraits. Every card is the
+ * same width and height regardless of name length (filename/dimensions
+ * both ellipsize to one line rather than wrapping, which is what makes a
+ * *fixed* height safe here), and the row never wraps to a second line --
+ * .queue itself is the horizontal scroller (native trackpad/scrollbar
+ * drag), with a wheel-delta forward in reference-layout.js remapping a
+ * plain vertical mouse wheel to it while the pointer is over the list. */
+@container portraits (max-aspect-ratio: 1.49) {
+  .batch .queue {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    overflow-x: auto;
+    /* auto, not hidden: normally there's exactly one row (no vertical
+     * scrollbar ever appears) since every card is a fixed 150px tall, but
+     * if the panel is ever dragged shorter than that plus the
+     * batchbar/batchFoot chrome around it, this is what lets the card
+     * stay fully reachable by scrolling instead of just clipping it. */
+    overflow-y: auto;
+    gap: 8px;
+    padding: 8px;
+  }
+  .batch .portraitRow {
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: stretch;
+    width: 118px;
+    height: 150px;
+    gap: 0;
+    overflow: hidden;
+  }
+  .batch .portraitRow > .queueItem {
+    flex-direction: column;
+    align-items: stretch;
+    /* v1.css's compact-toolbar pass !important's gap/padding here too. */
+    gap: 0 !important;
+    padding: 0 !important;
+    min-height: 0;
+    height: auto;
+  }
+  .batch .portraitRow > .queueItem img {
+    /* v1.css's compact-toolbar pass hard-codes 62x72 with !important,
+     * predating this mode -- matched in specificity+!important here. */
+    width: 100% !important;
+    height: 70px !important;
+    flex: none;
+    border-radius: 6px 6px 0 0;
+  }
+  .batch .portraitRow .qText {
+    /* Same vintage: 30px of right padding reserved for a trash button that
+     * used to float on top of this text absolutely-positioned -- long gone
+     * now that .portraitTrash is its own row below, but still !important'd. */
+    padding: 6px 7px 4px !important;
+    align-self: stretch;
+  }
+  .batch .portraitRow .qText strong,
+  .batch .portraitRow .qText .originalDimensions,
+  .batch .portraitRow .qText em {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin: 0;
+  }
+  .batch .portraitRow .qText strong { font-size: 11px; }
+  .batch .portraitRow .qText .originalDimensions { font-size: 9px; margin-top: 2px; }
+  /* .queueItem em{font-size:12px!important} in v1.css's compact pass. */
+  .batch .portraitRow .qText em { font-size: 9px !important; margin-top: 2px; }
+  /* Trash gets its own bottom strip -- never overlapping the thumbnail
+   * above or the name/dimensions/status text, which each already have
+   * their own row. */
+  .batch .portraitRow .portraitTrash {
+    align-self: flex-end;
+    margin: 0 4px 4px 0;
+    width: 20px;
+    height: 20px;
+    min-height: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .batch .portraitRow .portraitTrash svg { width: 13px; height: 13px; }
+}
 
 /* --- Responsive tool panels (Output Size, Color, Detail, Mask) ------------ */
 /* Stack side-by-side rows once the panel is too narrow for them, before
@@ -355,20 +451,49 @@
 @container (max-width: 300px) {
   .dockPanelBody .two,
   .dockPanelBody .three,
-  .dockPanelBody .outputDimensions,
   .dockPanelBody .colorGrid,
   .dockPanelBody .maskButtons { grid-template-columns: 1fr !important; flex-direction: column; align-items: stretch; }
-  /* Width/Height/DPI stack as full-width labeled rows instead of squeezing
-   * three inputs (plus their '×'/'px'/'dpi' captions) into one narrow row. */
-  .dockPanelBody .outputDimensions { gap: 6px; }
-  .dockPanelBody .outputDimensions input { width: 100%; flex: none; }
-  .dockPanelBody .outputDimensions > span { text-align: left; }
+}
+/* Framing's Auto Fit / Manual Fit are two compact icon+label buttons, not
+ * a pair of inputs -- they comfortably fit side by side even at the tools
+ * edge group's configured minimum width, so they're exempted from the
+ * 300px stack-everything threshold above and given their own, much lower
+ * one instead (effectively only the theoretical case of a panel forced
+ * narrower than that minimum). */
+.dockPanelBody .framingSection .two { grid-template-columns: 1fr 1fr !important; flex-direction: row !important; align-items: stretch !important; }
+@container (max-width: 170px) {
+  .dockPanelBody .framingSection .two { grid-template-columns: 1fr !important; flex-direction: column !important; }
+}
+/* Width x Height (reference-layout.js's .dimSize) and DPI (.dimDpi) are two
+ * separate flex groups within .outputDimensions specifically so a
+ * too-narrow panel only ever drops DPI to its own row -- never Width away
+ * from Height, and never stretching DPI's own 2-3-digit input to fill that
+ * row once it's there alone. */
+.outputDimensions { flex-wrap: wrap; gap: 8px 10px; }
+.outputDimensions .dimSize { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; }
+.outputDimensions .dimDpi { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.outputDimensions .dimDpi input { flex: none; width: 56px; min-width: 56px; }
+.outputDimensions .dimSize > span,
+.outputDimensions .dimDpi > span { flex: none; }
+@container (max-width: 300px) {
+  .dockPanelBody .outputDimensions .dimDpi { flex: 1 0 100%; justify-content: flex-start; margin-top: 2px; }
 }
 .dockPanelBody[data-panel='color'] .curveBox canvas#curves {
   width: 100%;
   height: auto;
   min-height: 120px;
   max-width: 280px;
+}
+
+/* --- Curve Editor header: RGB tabs (left) + Reset/Preview/Auto Color (right) --- */
+/* Global Reset/Preview/Auto Color (color-ranges.js moves them here from
+ * their old, separate .colorHeaderActions strip); margin-left:auto pins
+ * just this group right while "Curves" + the channel tablist stay at their
+ * normal flex position on the left, all on .curveTabs's one row. */
+.curveTabsActions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+@container (max-width: 220px) {
+  .dockPanelBody .curveTabs { flex-wrap: wrap; row-gap: 6px; }
+  .dockPanelBody .curveTabsActions { margin-left: 0; flex: 1 0 100%; justify-content: flex-end; }
 }
 
 /* --- Selective color: range swatches, hue spectrum, eyedropper ----------- */
@@ -387,8 +512,23 @@
   cursor: pointer;
   min-height: 0;
 }
-.rangeSwatch[data-range='master'] { background: repeating-conic-gradient(var(--swatch) 0% 25%, #454550 0% 50%) 0 0 / 100% 100%; }
-.rangeSwatch.active { border-color: var(--dv-color-clarette-accent, #b39af4); box-shadow: 0 0 0 2px rgba(179, 154, 244, 0.35); }
+/* Master used to be a pie-slice conic-gradient (meant to read as "every
+ * hue"), but at this size it just looks like a broken/transparent swatch --
+ * a plain dark fill reads as "neutral / applies to all colors" instead. */
+.rangeSwatch[data-range='master'] { background: #22222a; }
+/* .active is a shared, !important-ed rule used all over the app (curve
+ * tabs, before/cutoutToggle, ...) that swaps in a dark gray-purple
+ * background and kills box-shadow -- exactly the "different fill instead
+ * of a ring" this selector must NOT do. Every property it would otherwise
+ * clobber is restated here at matching !important so only the ring (border
+ * + glow) marks the active swatch; its own true color (or Master's dark
+ * fill) stays visible underneath, unchanged. */
+.rangeSwatch.active {
+  background: var(--swatch) !important;
+  border-color: var(--dv-color-clarette-accent, #b39af4) !important;
+  box-shadow: 0 0 0 2px rgba(179, 154, 244, 0.35) !important;
+}
+.rangeSwatch[data-range='master'].active { background: #22222a !important; }
 .eyedropperButton {
   display: flex;
   align-items: center;
@@ -402,6 +542,38 @@
 }
 .eyedropperButton svg { width: 17px; height: 17px; }
 .eyedropperButton.active { background: rgba(179, 154, 244, 0.22); border-color: var(--dv-color-clarette-accent, #b39af4); color: var(--dv-color-clarette-text, #f2f1f7); }
+
+/* Live color-preview loupe: fixed (viewport-relative, not canvas-relative)
+ * since it follows the raw pointer position color-ranges.js already
+ * computed in screen coordinates. Never intercepts pointer events itself --
+ * purely a readout, positioned by JS so it stays clear of the exact
+ * sampling point and inside the window near an edge. */
+.eyedropperLoupe {
+  position: fixed;
+  z-index: 2000;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+/* Sampled-area highlight ring: an absolutely-positioned overlay inside
+ * .viewport (a sibling of #mainCanvas, never drawn into it), so it can
+ * never end up in an exported image or the mask. The white ring plus a
+ * darker halo (box-shadow's second layer) keeps it readable over both
+ * bright and dark parts of the photo. */
+.eyedropperRing {
+  position: absolute;
+  z-index: 30;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 0 4px rgba(179, 154, 244, 0.55);
+  pointer-events: none;
+}
 
 /* The Hue slider's track shows the actual hue wheel it rotates through, so
  * dragging it previews where you're headed instead of reading a bare

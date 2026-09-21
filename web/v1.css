@@ -69,7 +69,16 @@ select{color-scheme:dark}select option,select optgroup{color:#f3eff9;background:
 .compactPreviewBar .guideToggle[hidden],.maskToolOptions[hidden]{display:none!important}
 .compactPreviewBar button.active{background:#574771;border-color:#b69af5;color:#f5eeff}
 
-#previewBackground svg{fill:#00a84f;stroke:none!important}
+/* .previewToggle svg{fill:currentColor!important} above (this button's own
+ * class) wins over a plain, non-!important fill here -- so the indicator
+ * always just matched the icon's default text color (i.e. read as a plain
+ * white circle) no matter what solid-preview color was actually selected in
+ * Settings. #previewBackground's own id beats a same-!important .class
+ * rule, so this now actually sticks; the color itself comes from a CSS
+ * variable the renderOutput() override in v1.js keeps in sync with
+ * app.settings.preview_background (including the live cross-window
+ * BroadcastChannel feed from the Settings window), not a hard-coded value. */
+#previewBackground svg{fill:var(--solidPreviewColor,#00a84f)!important;stroke:none!important}
 .previewHeaderActions{display:flex;align-items:center;gap:4px;margin-left:auto;flex:none}
 .editorHead .previewHeaderActions #before.comparisonIcon,.editorHead .previewHeaderActions #cutoutToggle.comparisonIcon,.editorHead .previewHeaderActions #previewBackground{display:inline-flex!important;align-items:center;justify-content:center;width:28px!important;min-width:28px!important;max-width:28px!important;height:28px!important;min-height:28px!important;flex:0 0 28px!important;padding:0!important;margin:0!important;border:1px solid #45404f!important;border-radius:7px;background:#272930;box-sizing:border-box}
 .editorHead .previewHeaderActions #before svg,.editorHead .previewHeaderActions #cutoutToggle svg,.editorHead .previewHeaderActions #previewBackground svg{display:block;width:18px!important;height:18px!important;margin:0!important;padding:0!important}

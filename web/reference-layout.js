@@ -30,8 +30,16 @@ const ds=document.querySelector('.detailSection');const scaleRow=el('upscale').c
 // Move rather than duplicate controls retained by the legacy logic.
 ds.querySelector('details').prepend(document.querySelector('.cloudControls'));ds.querySelector('.sectionTitle').lastElementChild.hidden=true;
 const maskSectionRef=el('detectMask').closest('section');maskSectionRef.className='maskSection';const maskOptions=document.createElement('details');maskOptions.innerHTML='<summary>Mask options & edge refinement</summary>';maskOptions.append(el('detectionProfile'),el('edgeOptions'));maskSectionRef.append(maskOptions);
-const outputSection=document.createElement('section');outputSection.className='outputSection';outputSection.innerHTML='<div class="sectionTitle"><span>Output size</span></div><div class="outputDimensions"></div>';maskSectionRef.after(outputSection);outputSection.querySelector('.sectionTitle').after(el('presetSelect'));
-for(const [id,label] of [['canvasWidth','Width'],['canvasHeight','Height'],['dpi','DPI']]){const input=el(id);input.setAttribute('aria-label',label);outputSection.querySelector('.outputDimensions').append(input);if(id==='canvasWidth')outputSection.querySelector('.outputDimensions').insertAdjacentHTML('beforeend','<span>×</span>');if(id==='canvasHeight')outputSection.querySelector('.outputDimensions').insertAdjacentHTML('beforeend','<span>px</span>');if(id==='dpi')outputSection.querySelector('.outputDimensions').insertAdjacentHTML('beforeend','<span>dpi</span>')}
+const outputSection=document.createElement('section');outputSection.className='outputSection';outputSection.innerHTML='<div class="sectionTitle"><span>Output size</span></div><div class="outputDimensions"><span class="dimSize"></span><span class="dimDpi"></span></div>';maskSectionRef.after(outputSection);outputSection.querySelector('.sectionTitle').after(el('presetSelect'));
+// Width and Height (plus their '×'/'px' captions) are grouped in one wrapper
+// and DPI in another so a flex-wrap break, if the panel is too narrow for
+// all three, always falls *between* those two groups -- never splitting a
+// group's own input from its caption -- and DPI (just 2-3 digits) keeps a
+// small natural width on its own row instead of stretching across the panel.
+const dimSize=outputSection.querySelector('.dimSize'),dimDpi=outputSection.querySelector('.dimDpi');
+for(const [id,label] of [['canvasWidth','Width'],['canvasHeight','Height']]){const input=el(id);input.setAttribute('aria-label',label);dimSize.append(input);if(id==='canvasWidth')dimSize.insertAdjacentHTML('beforeend','<span>×</span>')}
+dimSize.insertAdjacentHTML('beforeend','<span>px</span>');
+const dpiInput=el('dpi');dpiInput.setAttribute('aria-label','DPI');dimDpi.append(dpiInput);dimDpi.insertAdjacentHTML('beforeend','<span>dpi</span>');
 // Folder path is the selector: the small folder button at its end opens the chooser.
 el('finalFolder').parentElement.firstChild.textContent='Save to ';el('subfolder').parentElement.firstChild.textContent='Folder name ';el('chooseFolder').innerHTML=phosphor.folder;el('chooseFolder').title='Choose output location';el('chooseFolder').setAttribute('aria-label','Choose output location');el('finalFolder').after(el('chooseFolder'));el('saveFinals').textContent='Save final';el('savedCount').hidden=true;
 
@@ -47,3 +55,19 @@ el('viewZoom').querySelector('option[value="fill"]').remove();el('viewZoom').que
 document.querySelector('.editorHead').insertAdjacentHTML('beforeend','<small id="canvasSizeBadge"></small>');
 
 const historyTools=document.createElement('div');historyTools.className='historyTools';const redoButton=document.createElement('button');redoButton.id='redo';redoButton.setAttribute('data-mutation','');redoButton.innerHTML=phosphor['arrow-counter-clockwise']+'<span>Redo</span>';redoButton.title='Redo (⌘Y or ⌘⇧Z)';redoButton.setAttribute('aria-label','Redo');el('undo').innerHTML=phosphor['arrow-counter-clockwise']+'<span>Undo</span>';el('undo').title='Undo (⌘Z)';historyTools.append(el('undo'),redoButton);document.querySelector('.editorHead').after(historyTools);
+
+// The sideways (narrow) Portraits list is a horizontally-scrolling single
+// row (see dockview-theme.css's max-aspect-ratio container query) -- native
+// trackpad/scrollbar dragging already scrolls it sideways, but a plain
+// vertical mouse wheel wouldn't without this: it normally targets whatever
+// scrolls vertically, which for .queue is nothing (overflow-y:hidden in
+// that mode), so it would otherwise just bubble up and scroll some ancestor
+// instead. Only remapped while there's actually horizontal overflow to
+// consume -- in the wide/short filmstrip mode .queue wraps into a grid and
+// scrolls vertically like any normal list, and this leaves that alone.
+document.querySelector('.queue').addEventListener('wheel',e=>{
+ const q=e.currentTarget;
+ if(q.scrollWidth<=q.clientWidth)return;
+ if(Math.abs(e.deltaX)>=Math.abs(e.deltaY))return;
+ e.preventDefault();q.scrollLeft+=e.deltaY;
+},{passive:false});
