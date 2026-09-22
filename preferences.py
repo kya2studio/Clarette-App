@@ -147,6 +147,9 @@ def recover_settings(value):
         elif key in ('openai_connected','gemini_connected','seedream_connected'):
             if type(item) is bool:result[key]=item
             else:repaired=True
+        elif key in ('github_login','github_avatar_type'):
+            if item is None or (isinstance(item,str) and len(item)<=200):result[key]=item
+            else:repaired=True
         elif key=='default_guides':
             guides={}
             if isinstance(item,dict):

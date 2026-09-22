@@ -18,8 +18,17 @@ async function loadImage(url){const im=new Image();im.src=url;await im.decode();
 function imageURL(f,kind='work',thumb=false){return '/api/image?'+new URLSearchParams({batch:f.batch,id:f.id,kind,v:f.revision+'-'+f.work_stamp, ...(thumb?{thumb:'1'}:{})})}
 async function refresh(force=false){const r=await fetch('/api/state');if(!r.ok)throw Error('Could not read the saved session');const firstLoad=!app;app=await r.json();if(firstLoad)for(const j of app.jobs||[])if(j.status!=='running')displayedJobs.add(j.id);batch=app.batches[app.active];renderBatch();renderOutput();renderJobs();
  if(!batch?.files.length){++previewSequence;current=null;selected=null;workImg=null;reviewImg=null;reviewPreview=null;preview=null;cutPreview=null;maskImg=null;$('empty').hidden=false;$('filename').textContent='Your next headshot starts here';$('filePosition').textContent='Import a ZIP or images to begin';$('sourceSize').textContent='—';$('loupe').hidden=true;draw();flushCompletionSounds();return}
- const f=batch.files.find(x=>x.id===selected)||batch.files[0];const change=force||!current||f.id!==current.id||f.revision!==current.revision||f.work_stamp!==current.work_stamp;
- if(change&&!editPending&&!drag){selected=f.id;current=clone(f);draft=clone(f.draft||f.color);await loadSelected();renderBatch()}
+ const f=batch.files.find(x=>x.id===selected)||batch.files[0];const switching=!current||f.id!==current.id;const change=force||!current||f.id!==current.id||f.revision!==current.revision||f.work_stamp!==current.work_stamp;
+ if(change&&!editPending&&!drag){
+  // Switching to a different image: current.width/height/transform are about
+  // to become the new image's, but `preview` is still the OLD image's bitmap
+  // until loadSelected()'s async decode finishes. Drawing that stale bitmap
+  // against the new geometry (e.g. a stray ResizeObserver firing mid-load) is
+  // what caused the visible distort/glitch -- clearing it up front means the
+  // canvas just shows its plain background until the real frame is ready.
+  if(switching){preview=null;cutPreview=null;overlay=null;draw()}
+  selected=f.id;current=clone(f);draft=clone(f.draft||f.color);await loadSelected();renderBatch()
+ }
  await syncVoiceSelection();
  flushCompletionSounds();
 }
@@ -40,12 +49,32 @@ function renderBatch(){const signature=JSON.stringify([app.active,selected,Objec
  $('queue').scrollTop=queueScroll.top;$('queue').scrollLeft=queueScroll.left;
 }
 function renderOutput(){$('detectionProfile').value=app.settings.model;if(outputDraft&&outputDraft.batch!==batch?.id)outputDraft=null;const fs=batch?.files||[];$('saveScope').textContent=fs.filter(f=>f.mask).length+' cutouts · '+fs.filter(f=>!f.mask).length+' without masks stay in batch';if(document.activeElement!==$('finalFolder'))$('finalFolder').value=outputDraft?.folder??app.settings.final_folder??'';if(batch){if(document.activeElement!==$('subfolder'))$('subfolder').value=outputDraft?.subfolder??batch.subfolder;$('outputSize').textContent=`${batch.canvas.width} × ${batch.canvas.height} · PNG · ${batch.canvas.dpi} dpi`}}
-async function loadSelected(){$('loupe').hidden=true;const sequence=++loadSequence,id=current.id;const [im,m,orig,review]=await Promise.all([loadImage(imageURL(current)),current.mask?loadImage(imageURL(current,'mask')):Promise.resolve(null),loadImage(imageURL(current,'first-original')),current.mask?loadImage(imageURL(current,'mask-review')):Promise.resolve(null)]);if(!current||current.id!==id||sequence!==loadSequence)return;workImg=im;reviewImg=review;maskImg=m;originalImg=orig;$('empty').hidden=true;$('filename').textContent=current.name;$('filename').title=current.name;$('filePosition').textContent=(batch.files.findIndex(f=>f.id===current.id)+1)+' / '+batch.files.length;$('sourceSize').textContent=`${current.width} × ${current.height}`;$('cutoutStatus').textContent=current.mask_applied?'Applied · editable':current.mask?'Preview only':'No mask yet';syncPosition();syncColor();updatePreview();loadComparison();if(current.photos_error)message(current.photos_error,true);else if(current.external_error)message(current.external_error,true);else if(current.alignment_note)message(current.alignment_note)}
+async function loadSelected(){$('loupe').hidden=true;const sequence=++loadSequence,id=current.id;
+ // Only the working image (+ mask) gate the first paint. first-original
+ // (full-res, for the Before toggle) and mask-review (the loupe overlay)
+ // used to sit in the same Promise.all -- every selection waited on a
+ // second full-resolution decode before showing *anything*, which was the
+ // "noticeable lag" on every single click. Load them after, in the
+ // background, and let updatePreview() go as soon as the primary image is
+ // ready; nulled up front so the fast path never renders the *previous*
+ // image's leftover mask-review overlay.
+ reviewImg=null;originalImg=null;
+ const [im,m]=await Promise.all([loadImage(imageURL(current)),current.mask?loadImage(imageURL(current,'mask')):Promise.resolve(null)]);
+ if(!current||current.id!==id||sequence!==loadSequence)return;
+ workImg=im;maskImg=m;$('empty').hidden=true;$('filename').textContent=current.name;$('filename').title=current.name;$('filePosition').textContent=(batch.files.findIndex(f=>f.id===current.id)+1)+' / '+batch.files.length;$('sourceSize').textContent=`${current.width} × ${current.height}`;$('cutoutStatus').textContent=current.mask_applied?'Applied · editable':current.mask?'Preview only':'No mask yet';syncPosition();syncColor();updatePreview();loadComparison();if(current.photos_error)message(current.photos_error,true);else if(current.external_error)message(current.external_error,true);else if(current.alignment_note)message(current.alignment_note)
+ const [orig,review]=await Promise.all([loadImage(imageURL(current,'first-original')),current.mask?loadImage(imageURL(current,'mask-review')):Promise.resolve(null)]);
+ if(!current||current.id!==id||sequence!==loadSequence)return;
+ originalImg=orig;reviewImg=review;
+ if(current.mask)updatePreview();else draw();
+}
 function syncPosition(){const t=current.transform;$('scale').value=t.scale*100;$('scaleNumber').value=(t.scale*100).toFixed(1);for(const [field,key] of [['positionX','x'],['positionY','y']]){$(field).value=t[key];$(field+'Number').value=Math.round(t[key])}
  const scale=t.scale;$('resolutionHint').textContent=scale>1.05?`Current framing enlarges the source ${scale.toFixed(2)}×. Upscale before final output.`:'Source has enough pixels for this framing. Enhance only if needed.'}
 function syncColor(){for(const k of ['hue','saturation','lightness','shadows','highlights','temperature','tint','exposure','grain']){$(k).value=draft[k]||0;$(k+'Out').textContent=draft[k]||0}$('colorStatus').textContent=isDraft()?'Preview · unapplied':'Applied';$('applyColor').disabled=!isDraft();drawCurves()}
 function canvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c}
 const RANGE_CENTERS={red:0,yellow:60,green:120,cyan:180,blue:240,magenta:300};
+// Kept in sync with the duplicate copy in color-worker.js -- see the
+// comment there for why this needs to be deterministic, not Math.random().
+function grainNoise(i){const x=Math.sin(i*12.9898)*43758.5453;return x-Math.floor(x)}
 function adjustPixels(c,col){const ctx=c.getContext('2d',{willReadFrequently:true}),im=ctx.getImageData(0,0,c.width,c.height),a=im.data;const maps=['red','green','blue'].map(ch=>Array.from({length:256},(_,i)=>interp(interp(i/255,col[ch]),col.rgb)));
  const rangeEntries=Object.entries(col.color_ranges||{}).filter(([,v])=>v.hue||v.saturation||v.lightness);
  const exposure=col.exposure||0,lightness=col.lightness||0,grain=col.grain||0;
@@ -54,7 +83,7 @@ function adjustPixels(c,col){const ctx=c.getContext('2d',{willReadFrequently:tru
   let hh=((h+col.hue)%360+360)%360,sat=Math.max(0,Math.min(1,(max?delta/max:0)*(1+col.saturation/100))),v=Math.max(0,Math.min(1,max*(1+lightness/100)));
   for(const [name,entry] of rangeEntries){const center=entry.center??RANGE_CENTERS[name],d=((h-center+180)%360+360)%360-180;let weight;if(entry.bounds){const [a,b,c,z]=entry.bounds;weight=Math.max(0,Math.min(1,d>=b?1:(d-a)/Math.max(b-a,1e-6),d<=c?1:(z-d)/Math.max(z-c,1e-6)))}else weight=Math.max(0,1-Math.abs(d)/60);if(!weight)continue;hh=((hh+weight*entry.hue)%360+360)%360;sat=Math.max(0,Math.min(1,sat*(1+weight*entry.saturation/100)));v=Math.max(0,Math.min(1,v*(1+weight*entry.lightness/100)))}
   const C=v*sat,X=C*(1-Math.abs((hh/60)%2-1)),m=v-C;let q=hh<60?[C,X,0]:hh<120?[X,C,0]:hh<180?[0,C,X]:hh<240?[0,X,C]:hh<300?[X,0,C]:[C,0,X];[r,g,b]=q.map(x=>x+m)}
- if(grain){const n=(Math.random()-.5)*(grain/100*.08);r=Math.max(0,Math.min(1,r+n));g=Math.max(0,Math.min(1,g+n));b=Math.max(0,Math.min(1,b+n))}
+ if(grain){const n=(grainNoise(i)-.5)*(grain/100*.08);r=Math.max(0,Math.min(1,r+n));g=Math.max(0,Math.min(1,g+n));b=Math.max(0,Math.min(1,b+n))}
  a[i]=Math.round(r*255);a[i+1]=Math.round(g*255);a[i+2]=Math.round(b*255)}ctx.putImageData(im,0,0);return c}
 const colorWorker=new Worker('color-worker.js');let colorWaiting=null,colorNext=null,lastColorPresented=0,colorInteracting=false;
 colorWorker.onmessage=({data:d})=>{const job=colorWaiting;colorWaiting=null;if(job&&d.id>lastColorPresented&&current?.id===job.file&&job.source===workImg){if(d.error)message('Color preview failed: '+d.error,true);else{job.canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(d.pixels),job.canvas.width,job.canvas.height),0,0);if(d.reviewPixels){job.review.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(d.reviewPixels),job.review.width,job.review.height),0,0)}reviewPreview=job.review||null;lastColorPresented=d.id;preview=job.canvas;finishPreview()}}if(colorNext){const next=colorNext;colorNext=null;sendColor(next)}};
@@ -70,8 +99,17 @@ function geometry(c){const w=c.clientWidth,h=c.clientHeight,C=batch.canvas;let k
 const checkerTile=canvas(32,32);{const c=checkerTile.getContext('2d');c.fillStyle='#252831';c.fillRect(0,0,32,32);c.fillStyle='#30343e';c.fillRect(16,0,16,16);c.fillRect(0,16,16,16)}
 function checkers(ctx,w,h){ctx.fillStyle=ctx.createPattern(checkerTile,'repeat');ctx.fillRect(0,0,w,h)}
 function drawOne(c,isCutout){const dpr=Math.min(window.devicePixelRatio||1,2),w=c.clientWidth,h=c.clientHeight;if(!w||!h)return;if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr)}const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#12141a';ctx.fillRect(0,0,w,h);if(!preview||!current||!batch)return;
+ // Computed (and null-checked) before any ctx.save(): workImg/mask now load
+ // ahead of the full-res original/mask-review (see loadSelected()), so
+ // before-toggle or compare-mode can transiently have no image yet to draw.
+ // Bailing out *here* -- before the save/clip/translate below -- keeps the
+ // context's save stack balanced; an early return after ctx.save() without
+ // its matching restore() would leave the next drawOne() call clipped/
+ // translated by this one's leftover state.
+ let im=before?originalImg:(isCutout?cutPreview:(cutoutVisible?cutPreview:(reviewPreview||preview)));if(mode==='compare'&&!before){im=isCutout?(comparisonKind==='enhancement'?preview:cutPreview):(comparisonKind==='refinement'?comparisonImg:originalImg)||originalImg;}
+ if(!im)return;
  const g=geometry(c),t=current.transform,x=g.ox+t.x*g.k,y=g.oy+t.y*g.k,iw=current.width*t.scale*g.k,ih=current.height*t.scale*g.k;
- ctx.save();ctx.beginPath();ctx.rect(g.ox,g.oy,batch.canvas.width*g.k,batch.canvas.height*g.k);ctx.clip();checkers(ctx,w,h);ctx.save();ctx.translate(x+iw/2,y+ih/2);ctx.rotate((t.rotation||0)*Math.PI/180);ctx.translate(-x-iw/2,-y-ih/2);let im=before?originalImg:(isCutout?cutPreview:(cutoutVisible?cutPreview:(reviewPreview||preview)));if(mode==='compare'&&!before){im=isCutout?(comparisonKind==='enhancement'?preview:cutPreview):(comparisonKind==='refinement'?comparisonImg:originalImg)||originalImg;}if(before){const region=(current.baseline===current.original?current.original_region:null)||[0,0,originalImg.naturalWidth,originalImg.naturalHeight];ctx.drawImage(im,...region,x,y,iw,ih)}else ctx.drawImage(im,x,y,iw,ih);
+ ctx.save();ctx.beginPath();ctx.rect(g.ox,g.oy,batch.canvas.width*g.k,batch.canvas.height*g.k);ctx.clip();checkers(ctx,w,h);ctx.save();ctx.translate(x+iw/2,y+ih/2);ctx.rotate((t.rotation||0)*Math.PI/180);ctx.translate(-x-iw/2,-y-ih/2);if(before){const region=(current.baseline===current.original?current.original_region:null)||[0,0,originalImg.naturalWidth,originalImg.naturalHeight];ctx.drawImage(im,...region,x,y,iw,ih)}else ctx.drawImage(im,x,y,iw,ih);
  if(!before&&!cutoutVisible&&mode==='mask'&&!isCutout&&overlay)ctx.drawImage(overlay,x,y,iw,ih);
  if(stroke&&!isCutout){ctx.strokeStyle=stroke.mode==='keep'?'#ff6479':stroke.mode==='remove'?'#70c9ff':'#f2d181';ctx.lineWidth=stroke.shape==='polygon'?1.5:stroke.size*t.scale*g.k;ctx.lineCap='round';ctx.lineJoin='round';ctx.globalAlpha=.65;ctx.beginPath();stroke.points.forEach((p,i)=>{const xx=x+p[0]*iw,yy=y+p[1]*ih;i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy)});if(stroke.shape==='polygon'){ctx.closePath();ctx.fillStyle=ctx.strokeStyle;ctx.globalAlpha=.15;ctx.fill();ctx.globalAlpha=1;ctx.setLineDash([5,4])}ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1}
  ctx.restore();ctx.restore();ctx.strokeStyle='#b5a7cb';ctx.lineWidth=1.5;ctx.strokeRect(g.ox,g.oy,batch.canvas.width*g.k,batch.canvas.height*g.k);

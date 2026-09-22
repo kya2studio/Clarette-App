@@ -195,3 +195,51 @@ if(previewSettingsChannel)previewSettingsChannel.onmessage=event=>{
  if(app){Object.assign(app.settings,changes);draw()}
 };
 const renderWithPreviewSettings=renderOutput;renderOutput=function(){if(app&&Date.now()<livePreviewUntil)Object.assign(app.settings,livePreviewValues);return renderWithPreviewSettings()};
+
+// GitHub sign-in: one small circular button, top-right of the toolbar (last
+// child of nav). Device Flow needs no client secret for a desktop app --
+// /api/github-signin-start returns a short code to show the user, then
+// /api/github-signin-wait blocks server-side until GitHub reports success,
+// so there's no client-side polling timer to manage here either.
+const githubIcon='<svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>';
+const githubButton=makeButton('githubSignIn',githubIcon,'Sign in with GitHub');githubButton.className='iconButton';toolbar.append(githubButton);
+const githubDialog=document.createElement('dialog');githubDialog.id='githubDialog';
+githubDialog.innerHTML='<div class="dialogHead"><h2>GitHub</h2><button data-dismiss>Close</button></div><div id="githubDialogBody"></div>';
+document.body.append(githubDialog);
+githubDialog.querySelector('[data-dismiss]').onclick=()=>githubDialog.close();
+function renderGithubButton(){
+ const login=app?.settings?.github_login;
+ if(login){
+  const img=document.createElement('img');img.className='githubAvatar';img.src='/api/github-avatar?u='+encodeURIComponent(login);img.alt='';
+  githubButton.replaceChildren(img);
+ }else githubButton.innerHTML=githubIcon;
+ githubButton.title=login?'Signed in to GitHub as '+login:'Sign in with GitHub';
+}
+// login/verification_uri/user_code come from GitHub's own API responses --
+// not template-literal'd into innerHTML, textContent keeps them inert even
+// though GitHub already constrains what characters a login can contain.
+githubButton.onclick=guarded(async()=>{
+ const login=app?.settings?.github_login,body=$('githubDialogBody');
+ if(login){
+  body.replaceChildren();
+  const p=document.createElement('p');p.textContent='Signed in as ';const strong=document.createElement('strong');strong.textContent=login;p.append(strong,'.');
+  const signOut=document.createElement('button');signOut.id='githubSignOut';signOut.textContent='Sign out';
+  body.append(p,signOut);
+  githubDialog.showModal();
+  signOut.onclick=guarded(async()=>{await api('/api/github-signout');githubDialog.close();await refresh()});
+  return;
+ }
+ body.textContent='Starting sign-in…';githubDialog.showModal();
+ const device=await api('/api/github-signin-start');
+ body.replaceChildren();
+ const intro=document.createElement('p');intro.append('Enter this code at ',Object.assign(document.createElement('strong'),{textContent:device.verification_uri}),' (opened in your browser):');
+ const code=document.createElement('p');code.className='githubCode';code.textContent=device.user_code;
+ const waiting=document.createElement('p');waiting.textContent='Waiting for confirmation…';
+ body.append(intro,code,waiting);
+ try{
+  await api('/api/github-signin-wait',{device_code:device.device_code,interval:device.interval,expires_in:device.expires_in});
+  githubDialog.close();await refresh();message('Signed in to GitHub');
+ }catch(e){body.textContent=e.message}
+});
+const renderWithGithub=renderOutput;renderOutput=function(){renderWithGithub();renderGithubButton()};
+renderGithubButton();

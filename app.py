@@ -497,6 +497,29 @@ def action(path,d):
     if path=='/api/test-connection':
         from cloud import test_connection
         return test_connection(d.get('provider'))
+    if path=='/api/github-signin-start':
+        import github_auth
+        device=github_auth.start()
+        webbrowser.open(device['verification_uri'])
+        return {'user_code':device['user_code'],'verification_uri':device['verification_uri'],'device_code':device['device_code'],'interval':device.get('interval',5),'expires_in':device.get('expires_in',900)}
+    if path=='/api/github-signin-wait':
+        import github_auth
+        from credentials import set_key
+        token=github_auth.wait_for_token(d.get('device_code'),d.get('interval'),d.get('expires_in'))
+        login,avatar,avatar_type=github_auth.fetch_profile(token)
+        set_key('github',token)
+        if avatar:(CACHE/'github-avatar').write_bytes(avatar)
+        with LOCK:
+            S['settings']['github_login']=login;S['settings']['github_avatar_type']=avatar_type if avatar else None;save()
+        return {'ok':True,'login':login}
+    if path=='/api/github-signout':
+        import github_auth
+        github_auth.sign_out()
+        avatar_path=CACHE/'github-avatar'
+        if avatar_path.is_file():avatar_path.unlink()
+        with LOCK:
+            S['settings'].pop('github_login',None);S['settings'].pop('github_avatar_type',None);save()
+        return {'ok':True}
     if path=='/api/clear-batch':
         with LOCK:
             batch=S['batches'][S['active']]
@@ -547,16 +570,12 @@ def action(path,d):
             keep={k:copy.deepcopy(v) for k,v in S['settings'].items() if k in ('default_guides','final_folder','openai_connected','gemini_connected','seedream_connected')}
             S['settings']=dict(fresh()['settings'],**keep);save()
         return {'ok':True}
-    if path=='/api/settings':
-        if 'upscale_method' in d and d['upscale_method'] not in ('neural','fast','hypir'):raise ValueError('Unknown enhancement method')
-        if 'model' in d and d['model'] not in ('birefnet-general','birefnet-portrait','u2netp'):raise ValueError('Unknown cutout model')
-        with LOCK:
-            for key in ('final_folder','model','notifications','notification_sound','voice_commands','upscale_method','quality_cutout','accelerate','auto_guide','openai_model','gemini_model'):
-                if key in d:S['settings'][key]=d[key]
-            if S['settings']['model'] not in ('birefnet-general','birefnet-portrait','u2netp'):raise ValueError('Unknown cutout model')
-            if S['settings'].get('upscale_method') not in ('neural','fast','hypir'):raise ValueError('Unknown enhancement method')
-            save()
-        return {'ok':True}
+    # /api/settings is handled by actions.py (preferences.validate_settings) --
+    # actions.handle() above returns before this if/elif chain is ever
+    # reached for that path, so a second block here was unreachable dead
+    # code (and, worse, disagreed with the real one: it thought
+    # upscale_method:'hypir' was valid, which preferences.validate_settings
+    # has never accepted).
     if path=='/api/output-presets-export':
         from output_presets import export_document
         with LOCK:document=export_document(S,d.get('selected_ids'))
@@ -942,6 +961,11 @@ class Handler(BaseHTTPRequestHandler):
             if self.headers.get('Host','').split(':')[0] not in ('127.0.0.1','localhost'):return self.send({'error':'Local access only'},403)
             if p=='/api/state':return self.send(state(settings_only=qs.get('view')=='settings'))
             if p=='/api/ping':return self.send(dict(app='Clarette',version=VERSION))
+            if p=='/api/github-avatar':
+                avatar_path=CACHE/'github-avatar'
+                if not avatar_path.is_file():return self.send({'error':'Not found'},404)
+                with LOCK:kind=S['settings'].get('github_avatar_type') or 'image/jpeg'
+                return self.send(avatar_path.read_bytes(),kind=kind)
             if p=='/api/image':
                 with LOCK:_,f=getfile(qs);f=copy.deepcopy(f)
                 kind=qs.get('kind','work')
