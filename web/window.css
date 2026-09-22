@@ -82,3 +82,27 @@ body[data-kind="new-batch"] label.column,body[data-kind="rename-batch"] label.co
 body[data-kind="new-batch"] #name,body[data-kind="rename-batch"] #name{flex:1;width:0;max-width:none;margin:0}
 body[data-kind="new-batch"] #content>p{margin:14px 0 7px}
 body[data-kind="new-batch"] .row{flex-wrap:nowrap}
+
+/* License tab: a status card modeled on the reference mockup the user
+   provided (a masked license-key box, label/value rows, actions, an
+   inline "use a different key" disclosure, a colored status line). Note
+   in this file's own body{margin:0} spirit, .hint is display:none inside
+   .settingsWindow (see above) -- explanatory text here uses inline styles
+   instead, same fix as the rest of Settings' hint text. */
+.licenseHead{display:flex;align-items:center;gap:9px;margin:0 0 6px}
+.licenseHead svg{flex:none}
+.licenseHead h2{margin:0}
+.licenseKeyCard{display:flex;flex-direction:column;gap:8px;background:#282b36}
+.licenseKeyLabel{font-size:11px;color:#9d94b3;text-transform:uppercase;letter-spacing:.4px}
+.licenseKeyRow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.licenseKeyMasked{font-size:17px;letter-spacing:2px;font-weight:600}
+.licenseRow{display:flex;justify-content:space-between;gap:15px;padding:11px 0;border-bottom:1px solid #ffffff12;font-size:13px}
+.licenseRow>span:first-child{color:#9d94b3}
+.licenseSwap{margin-top:16px}
+.licenseSwap>summary{cursor:pointer;color:#c9b0ff;font-size:12px;list-style:none}
+.licenseSwap>summary::-webkit-details-marker{display:none}
+.licenseSwap>summary:before{content:'›  ';font-weight:700}
+.licenseSwap[open]>summary{margin-bottom:12px}
+.licenseSwap[open]>summary:before{content:'⌄  '}
+.licenseStatusLine{display:flex;align-items:center;gap:7px;color:#7fc4ff;font-size:12px;margin-top:16px}
+.licenseStatusLine svg{flex:none}

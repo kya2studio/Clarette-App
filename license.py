@@ -27,10 +27,10 @@ def verify(key):
 
 def status(settings):
     key=settings.get('license_key','')
-    if not key:return {'licensed':False,'email':None,'error':None}
+    if not key:return {'licensed':False,'email':None,'issued':None,'error':None}
     try:
-        payload=verify(key);return {'licensed':True,'email':payload.get('email'),'error':None}
-    except ValueError as e:return {'licensed':False,'email':None,'error':str(e)}
+        payload=verify(key);return {'licensed':True,'email':payload.get('email'),'issued':payload.get('issued'),'error':None}
+    except ValueError as e:return {'licensed':False,'email':None,'issued':None,'error':str(e)}
 
 
 def _demo():
@@ -41,11 +41,11 @@ def _demo():
     priv=Ed25519PrivateKey.generate()
     real_public=PUBLIC_KEY
     PUBLIC_KEY=base64.urlsafe_b64encode(priv.public_key().public_bytes_raw()).decode()
-    payload=json.dumps({'email':'buyer@example.com'}).encode()
+    payload=json.dumps({'email':'buyer@example.com','issued':'2026-01-01'}).encode()
     sig=priv.sign(payload)
     key='.'.join(base64.urlsafe_b64encode(part).decode() for part in (payload,sig))
     assert verify(key)['email']=='buyer@example.com'
-    assert status({'license_key':key})=={'licensed':True,'email':'buyer@example.com','error':None}
+    assert status({'license_key':key})=={'licensed':True,'email':'buyer@example.com','issued':'2026-01-01','error':None}
     assert status({})['licensed'] is False
     tampered=key[:-4]+'AAAA'
     try:verify(tampered);raise AssertionError('tampered key must not verify')
