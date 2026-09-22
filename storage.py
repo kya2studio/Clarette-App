@@ -18,7 +18,7 @@ def references(value):
     found=set()
     if isinstance(value,dict):
         for k,v in value.items():
-            if k in ('work','mask','baseline','original','stable_work') and isinstance(v,str): found.add(v)
+            if k in ('work','mask','baseline','original','stable_work','mask_review_work') and isinstance(v,str): found.add(v)
             elif isinstance(v,(dict,list)): found.update(references(v))
     elif isinstance(value,list):
         for item in value: found.update(references(item))

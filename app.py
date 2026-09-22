@@ -60,7 +60,7 @@ def _snapshot_record(value):
         if transform is None:raise ValueError()
     except (KeyError,TypeError,ValueError,OverflowError):return None
     result=copy.deepcopy(value);result.update(color=color,draft=draft,transform=transform)
-    for key in ('mask','baseline','stable_work'):
+    for key in ('mask','baseline','stable_work','mask_review_work'):
         if result.get(key) is not None and not _safe_relative(result[key]):result[key]=None
     result['mask_applied']=bool(result.get('mask_applied') and result.get('mask'))
     return result
@@ -86,7 +86,7 @@ def _file_record(value,batch_id,canvas):
     except (TypeError,ValueError,OverflowError):result['draft']=copy.deepcopy(result['color']);repaired=True
     if result.get('mask') is not None and not _safe_relative(result['mask']):result['mask']=None;repaired=True
     result['mask_applied']=bool(result.get('mask_applied') and result.get('mask'))
-    for key in ('baseline','stable_work'):
+    for key in ('baseline','stable_work','mask_review_work'):
         if result.get(key) is not None and not _safe_relative(result[key]):result.pop(key,None);repaired=True
     result.setdefault('baseline',result['original'])
     original_size=result.get('original_size')
@@ -217,6 +217,15 @@ def atomic(p,data):
     p=Path(p);p.parent.mkdir(parents=True,exist_ok=True);t=p.with_name('.'+p.name+'.'+ident()+'.tmp');t.write_bytes(data);t.replace(p)
 def folder(f):return CACHE/'batches'/f['batch']/'items'/f['id']
 def source(f):return imaging.load(folder(f)/f['work'])
+def mask_review_path(f):
+    # Legacy detections already retain their uncorrected working image here.
+    previous=(f.get('comparisons') or {}).get('refinement') or {}
+    name=f.get('mask_review_work') or previous.get('mask_review_work') or previous.get('work')
+    if not _safe_relative(name) or not (folder(f)/name).is_file():return None
+    with Image.open(folder(f)/name) as image:
+        if image.size!=(f['width'],f['height']):return None
+    return name
+
 def mask(f):return Image.open(folder(f)/f['mask']).convert('L') if f.get('mask') else None
 
 def getfile(data):
@@ -227,7 +236,7 @@ def getfile(data):
     return batch,f
 
 def snapshot(f):
-    return {k:copy.deepcopy(f.get(k)) for k in ('work','mask','mask_applied','color','draft','transform','width','height','comparisons','crop_suggestion','original_region','baseline','stable_work')}
+    return {k:copy.deepcopy(f.get(k)) for k in ('work','mask','mask_applied','color','draft','transform','width','height','comparisons','crop_suggestion','original_region','baseline','stable_work','mask_review_work')}
 
 def snap(f):
     f.setdefault('history',[]).append(snapshot(f));f['history']=f['history'][-20:];f['redo']=[]
@@ -430,7 +439,7 @@ def commit_work(f,im,preserve_mask=True):
     oldw=f['width'];old=folder(f)/f['work'];backup='HISTORY/'+ident()+'.png';atomic(folder(f)/backup,old.read_bytes())
     snap(f);f['history'][-1]['work']=backup
     atomic(old,imaging.png(im));f['width'],f['height']=im.size;f['work_stamp']=old.stat().st_mtime_ns;f['transform']['scale']*=oldw/im.width
-    f['comparisons']={};f.pop('crop_suggestion',None);f['mask']=None;f['mask_applied']=False;f['color']=imaging.color_defaults();f['draft']=imaging.color_defaults();touch(f)
+    f['comparisons']={};f.pop('mask_review_work',None);f.pop('crop_suggestion',None);f['mask']=None;f['mask_applied']=False;f['color']=imaging.color_defaults();f['draft']=imaging.color_defaults();touch(f)
     f['stable_work']='BASELINE/'+ident()+'.png';atomic(folder(f)/f['stable_work'],imaging.png(im))
     if oldmask is not None:
         name='MASKS/'+ident()+'.png';atomic(folder(f)/name,imaging.png(oldmask.resize(im.size,Image.Resampling.LANCZOS)));f['mask']=name;f['mask_applied']=oldapplied
@@ -830,7 +839,10 @@ def action(path,d):
             if not captured.get('mask'):raise ValueError('Detect or paint a mask first')
             if dirty(captured):raise ValueError('Apply Color before refining edge colors')
             with LOCK:
-                report.check();live=current_job_file();commit_work(live,processed)
+                report.check();live=current_job_file();review=mask_review_path(live)
+                review_image=imaging.color(imaging.load(folder(live)/review) if review else source(live),live['color'])
+                commit_work(live,processed)
+                review='HISTORY/'+ident()+'.png';atomic(folder(live)/review,imaging.png(review_image));live['mask_review_work']=review
                 live['comparisons']=live.get('comparisons') or {};live['comparisons']['refinement']={k:copy.deepcopy(v) for k,v in live['history'][-1].items() if k!='comparisons'}
                 name='MASKS/'+ident()+'.png';atomic(folder(live)/name,imaging.png(newmask));live['mask']=name;live['mask_applied']=False;save()
             return {'mask':True}
@@ -854,8 +866,11 @@ def action(path,d):
         else:raise ValueError('Unknown operation')
         with LOCK:
             report.check();live=current_job_file()
+            review=mask_review_path(live)
+            if review:live['mask_review_work']=review
             if path=='/api/mask-detect' and processed is not None:
-                color=copy.deepcopy(live['color']);draft=copy.deepcopy(live.get('draft',color));commit_work(live,processed);live['color']=color;live['draft']=draft
+                review=mask_review_path(live);color=copy.deepcopy(live['color']);draft=copy.deepcopy(live.get('draft',color));commit_work(live,processed);live['color']=color;live['draft']=draft
+                live['mask_review_work']=review or live['history'][-1]['work']
                 live['comparisons']['refinement']={k:copy.deepcopy(v) for k,v in live['history'][-1].items() if k!='comparisons'}
             else:snap(live)
             if path=='/api/mask-paint' and captured.get('mask'):
@@ -938,6 +953,8 @@ class Handler(BaseHTTPRequestHandler):
                     im=imaging.load(folder(f)/previous['work'])
                     oldmask=Image.open(folder(f)/previous['mask']).convert('L') if previous.get('mask') else None
                     im=imaging.composite(im,oldmask,previous['color'],kind=='refinement')
+                elif kind=='mask-review':
+                    name=mask_review_path(f);im=imaging.load(folder(f)/name) if name else source(f)
                 elif kind=='original':im=imaging.load(folder(f)/f.get('baseline',f['original']))
                 elif kind=='first-original':im=imaging.load(folder(f)/f['original'])
                 elif kind=='mask':im=mask(f) or Image.new('L',(f['width'],f['height']),0)

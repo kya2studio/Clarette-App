@@ -12,4 +12,4 @@ function adjustPixels(c,col){const ctx=c.getContext('2d',{willReadFrequently:tru
  if(grain){const n=(Math.random()-.5)*(grain/100*.08);r=Math.max(0,Math.min(1,r+n));g=Math.max(0,Math.min(1,g+n));b=Math.max(0,Math.min(1,b+n))}
  a[i]=Math.round(r*255);a[i+1]=Math.round(g*255);a[i+2]=Math.round(b*255)}ctx.putImageData(im,0,0);return c}
 
-self.onmessage=({data:d})=>{try{const im={data:new Uint8ClampedArray(d.pixels)};const c={width:d.width,height:d.height,getContext:()=>({getImageData:()=>im,putImageData:()=>{}})};adjustPixels(c,d.color);self.postMessage({id:d.id,pixels:im.data.buffer},[im.data.buffer])}catch(e){self.postMessage({id:d.id,error:String(e)})}};
+self.onmessage=({data:d})=>{try{const apply=pixels=>{const im={data:new Uint8ClampedArray(pixels)};const c={width:d.width,height:d.height,getContext:()=>({getImageData:()=>im,putImageData:()=>{}})};adjustPixels(c,d.color);return im.data.buffer};const pixels=apply(d.pixels),reviewPixels=d.reviewPixels?apply(d.reviewPixels):null;self.postMessage({id:d.id,pixels,reviewPixels},reviewPixels?[pixels,reviewPixels]:[pixels])}catch(e){self.postMessage({id:d.id,error:String(e)})}};

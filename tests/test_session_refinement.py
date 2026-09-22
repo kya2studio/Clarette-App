@@ -87,4 +87,23 @@ class SessionFixTests(unittest.TestCase):
   self.assertEqual(preferences.defaults()['toolbar_tools'],['chatgpt','gemini','prompt'])
   self.assertEqual(preferences.validate_settings({'toolbar_tools':[]})['toolbar_tools'],[])
   with self.assertRaises(ValueError):preferences.validate_settings({'toolbar_tools':['settings']})
+ def test_mask_review_retains_natural_pixels_without_changing_cutout(self):
+  f=self.import_portrait();original=app.source(f).tobytes()
+  app.commit_work(f,Image.new('RGBA',(40,50),'red'))
+  f['comparisons']['refinement']=dict(f['history'][-1])
+  review=app.mask_review_path(f)
+  self.assertEqual(imaging.load(app.folder(f)/review).tobytes(),original)
+  self.assertEqual(app.source(f).getpixel((0,0)),(255,0,0,255))
+  f['mask_review_work']=review
+  self.assertEqual(app.snapshot(f)['mask_review_work'],review)
+  self.assertIn(review,storage.references(f))
+  app.commit_work(f,Image.new('RGBA',(80,100),'green'))
+  self.assertIsNone(app.mask_review_path(f))
+  self.assertEqual(f['history'][-1]['mask_review_work'],review)
+ def test_mask_review_rejects_unsafe_missing_and_wrong_sized_sources(self):
+  f=self.import_portrait()
+  for name in ('../outside.png','HISTORY/missing.png'):
+   f['mask_review_work']=name;self.assertIsNone(app.mask_review_path(f))
+  name='HISTORY/other-size.png';app.atomic(app.folder(f)/name,imaging.png(Image.new('RGBA',(4,5))))
+  f['mask_review_work']=name;self.assertIsNone(app.mask_review_path(f))
 if __name__=='__main__':unittest.main()
