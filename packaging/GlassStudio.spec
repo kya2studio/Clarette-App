@@ -2,7 +2,7 @@
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 from pathlib import Path
 root=Path(SPECPATH).parent
-datas=[(str(root/'engine-packages'),'engine-packages'),(str(root/'web'),'web'),(str(root/'models'),'models'),(str(root/'hypir_runner.py'),'.'),(str(root/'adapter_runner.py'),'.'),(str(root/'HYPIR-LICENSE.txt'),'.')];binaries=[(str(root/'photos/PhotosBridge'),'photos')];hiddenimports=['webview.platforms.cocoa','image_worker','voice_actions','imaging','cv2','support','output_presets','guides','notifications','UserNotifications','credentials','cloud','Security','requests','release','preferences','storage','exporting','providers','actions','shortcuts','native','photos_bridge','optional_engines','managed_engines','hypir_engine','restoration','face_restore']
+datas=[(str(root/'engine-packages'),'engine-packages'),(str(root/'web'),'web'),(str(root/'models'),'models'),(str(root/'hypir_runner.py'),'.'),(str(root/'adapter_runner.py'),'.'),(str(root/'HYPIR-LICENSE.txt'),'.')];binaries=[(str(root/'photos/PhotosBridge'),'photos')];hiddenimports=['webview.platforms.cocoa','image_worker','voice_actions','imaging','cv2','support','output_presets','guides','notifications','UserNotifications','credentials','cloud','Security','requests','release','preferences','storage','exporting','providers','actions','shortcuts','native','photos_bridge','optional_engines','managed_engines','hypir_engine','restoration','face_restore','license']
 for package in ('rembg','pymatting','onnxruntime'):
     d,b,h=collect_all(package);datas+=d;binaries+=b;hiddenimports+=h
 hiddenimports+=collect_submodules('webview')

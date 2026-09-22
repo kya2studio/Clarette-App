@@ -196,80 +196,20 @@ if(previewSettingsChannel)previewSettingsChannel.onmessage=event=>{
 };
 const renderWithPreviewSettings=renderOutput;renderOutput=function(){if(app&&Date.now()<livePreviewUntil)Object.assign(app.settings,livePreviewValues);return renderWithPreviewSettings()};
 
-// Sign-in: one small circular button, top-right of the toolbar (last child
-// of nav), opening a dedicated window with one "Continue with <provider>"
-// button per identity provider. There's no local account system behind
-// this (see identityDialog's own note) -- each provider button is just
-// Device Flow delegated entirely to that provider: no client secret for a
-// desktop app, and /api/identity-signin-wait blocks server-side until the
-// provider reports success, so there's no client-side polling timer to
-// manage here either.
-const IDENTITY_PROVIDERS=[
- {id:'github',label:'GitHub',icon:'<svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>'},
- {id:'google',label:'Google',icon:'<svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.9-2.26 5.36-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>'},
-];
-const identityDefaultIcon='<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 20c0-4 3.58-7 8-7s8 3 8 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
-const identityButton=makeButton('identitySignIn',identityDefaultIcon,'Sign in');identityButton.className='iconButton';toolbar.append(identityButton);
-const identityDialog=document.createElement('dialog');identityDialog.id='identityDialog';
-identityDialog.innerHTML='<div class="dialogHead"><h2>Sign in to Clarette</h2><button data-dismiss>Close</button></div><div id="identityDialogBody"></div>';
-document.body.append(identityDialog);
-identityDialog.querySelector('[data-dismiss]').onclick=()=>identityDialog.close();
-function renderIdentityButton(){
- const login=app?.settings?.identity_login;
- if(login){
-  const img=document.createElement('img');img.className='identityAvatar';img.src='/api/identity-avatar?u='+encodeURIComponent(login);img.alt='';
-  identityButton.replaceChildren(img);
- }else identityButton.innerHTML=identityDefaultIcon;
- const providerLabel=IDENTITY_PROVIDERS.find(p=>p.id===app?.settings?.identity_provider)?.label;
- identityButton.title=login?'Signed in'+(providerLabel?' with '+providerLabel:'')+' as '+login:'Sign in';
-}
-// Signed-out view: one button per provider. No local account system sits
-// behind any of these -- Clarette has no server, no user database, nothing
-// to "register" an account with -- each is purely "prove who you are via
-// this provider" (Device Flow), so there's a Sign in view but no separate
-// Register view.
-function renderIdentityChooser(body){
- body.replaceChildren();
- const intro=document.createElement('p');intro.className='identityIntro';intro.textContent='Choose a provider to sign in with. Clarette never sees your password -- only your name and avatar, and only after you approve it there.';
- body.append(intro);
- for(const provider of IDENTITY_PROVIDERS){
-  const b=document.createElement('button');b.className='identityProviderButton';b.innerHTML=provider.icon+'<span>Continue with '+provider.label+'</span>';
-  b.onclick=guarded(()=>startIdentitySignIn(provider,body));
-  body.append(b);
- }
-}
-async function startIdentitySignIn(provider,body){
- body.replaceChildren();const status=document.createElement('p');status.textContent='Starting sign-in…';body.append(status);
- try{
-  const device=await api('/api/identity-signin-start',{provider:provider.id});
-  body.replaceChildren();
-  const intro=document.createElement('p');intro.append('Enter this code at ',Object.assign(document.createElement('strong'),{textContent:device.verification_uri}),' (opened in your browser):');
-  const code=document.createElement('p');code.className='identityCode';code.textContent=device.user_code;
-  const waiting=document.createElement('p');waiting.textContent='Waiting for confirmation…';
-  const back=document.createElement('button');back.className='textButton';back.textContent='Choose a different provider';back.onclick=()=>renderIdentityChooser(body);
-  body.append(intro,code,waiting,back);
-  await api('/api/identity-signin-wait',{provider:provider.id,device_code:device.device_code,interval:device.interval,expires_in:device.expires_in});
-  identityDialog.close();await refresh();message('Signed in with '+provider.label);
- }catch(e){
-  body.replaceChildren();
-  const p=document.createElement('p');p.textContent=e.message;
-  const back=document.createElement('button');back.className='textButton';back.textContent='Try again';back.onclick=()=>renderIdentityChooser(body);
-  body.append(p,back);
- }
-}
-identityButton.onclick=guarded(async()=>{
- const login=app?.settings?.identity_login,body=$('identityDialogBody');
- if(login){
-  body.replaceChildren();
-  const providerLabel=IDENTITY_PROVIDERS.find(p=>p.id===app?.settings?.identity_provider)?.label||'your account';
-  const p=document.createElement('p');p.textContent='Signed in with '+providerLabel+' as ';const strong=document.createElement('strong');strong.textContent=login;p.append(strong,'.');
-  const signOut=document.createElement('button');signOut.id='identitySignOut';signOut.textContent='Sign out';
-  body.append(p,signOut);
-  identityDialog.showModal();
-  signOut.onclick=guarded(async()=>{await api('/api/identity-signout');identityDialog.close();await refresh()});
-  return;
- }
- renderIdentityChooser(body);identityDialog.showModal();
+// License gate: block the app until a valid key is entered, verified
+// server-side in license.py.
+const licenseDialog=$('licenseDialog');
+$('activateLicense').onclick=guarded(async()=>{
+ const key=$('licenseKeyInput').value.trim();
+ if(!key){message('Enter your license key',true);return}
+ await api('/api/activate-license',{key});
+ await refresh();message('License activated')
 });
-const renderWithIdentity=renderOutput;renderOutput=function(){renderWithIdentity();renderIdentityButton()};
-renderIdentityButton();
+$('licenseKeyInput').onkeydown=e=>{if(e.key==='Enter')$('activateLicense').click()};
+function syncLicense(){
+ if(!app)return;
+ if(app.licensed?.licensed){if(licenseDialog.open)licenseDialog.close();return}
+ if(!licenseDialog.open)licenseDialog.showModal()
+}
+const renderWithLicense=renderOutput;renderOutput=function(){renderWithLicense();syncLicense()};
+syncLicense();

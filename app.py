@@ -294,6 +294,8 @@ def state(settings_only=False):
         out['provider_models']=copy.deepcopy(cloud.COMPATIBLE);out['engines']=statuses(S['settings'],MODELS);out['hypir_available']=out['engines']['hypir']['status']=='Ready'
         import native
         out['external_apps']=native.available_apps()
+        import license
+        out['licensed']=license.status(S['settings'])
         out['jobs']=list(copy.deepcopy(JOBS).values());out['pending_update']=copy.deepcopy(PENDING_UPDATE);return out
 
 def notify(message):
@@ -449,7 +451,11 @@ def commit_work(f,im,preserve_mask=True):
 def thumbnail(path,stamp):
     im=imaging.load(path);im.thumbnail((80,80));return imaging.png(im)
 
+UNLICENSED_ALLOWED=('/api/activate-license','/api/quit','/api/window','/api/close-window','/api/check-updates','/api/print-profiles','/api/storage')
 def action(path,d):
+    if path not in UNLICENSED_ALLOWED:
+        import license
+        if not license.status(S['settings'])['licensed']:raise ValueError('Activate your Clarette license first.')
     if path=='/api/job-presented':
         with LOCK:
             job=JOBS.get(d.get('job'))
@@ -482,6 +488,14 @@ def action(path,d):
             target,payload=command_request(d.get('command'),batch['id'],selected)
         return action(target,payload)
 
+    if path=='/api/activate-license':
+        import license
+        key=d.get('key','').strip();payload=license.verify(key)
+        with LOCK:S['settings']['license_key']=key;save()
+        return {'ok':True,'email':payload.get('email')}
+    if path=='/api/deactivate-license':
+        with LOCK:S['settings'].pop('license_key',None);save()
+        return {'ok':True}
     if path=='/api/credentials-match':
         from credentials import matches_key
         return {'matches':matches_key(d.get('provider'),d.get('key',''))}
@@ -497,31 +511,6 @@ def action(path,d):
     if path=='/api/test-connection':
         from cloud import test_connection
         return test_connection(d.get('provider'))
-    if path in ('/api/identity-signin-start','/api/identity-signin-wait','/api/identity-signout'):
-        import github_auth,google_auth
-        provider=d.get('provider')
-        identity={'github':github_auth,'google':google_auth}.get(provider)
-        if not identity:raise ValueError('Unknown sign-in provider')
-        if path=='/api/identity-signin-start':
-            device=identity.start()
-            webbrowser.open(device['verification_uri'])
-            return {'user_code':device['user_code'],'verification_uri':device['verification_uri'],'device_code':device['device_code'],'interval':device.get('interval',5),'expires_in':device.get('expires_in',900)}
-        if path=='/api/identity-signin-wait':
-            from credentials import set_key
-            token=identity.wait_for_token(d.get('device_code'),d.get('interval'),d.get('expires_in'))
-            login,avatar,avatar_type=identity.fetch_profile(token)
-            set_key(provider,token)
-            if avatar:(CACHE/'identity-avatar').write_bytes(avatar)
-            with LOCK:
-                S['settings']['identity_provider']=provider;S['settings']['identity_login']=login;S['settings']['identity_avatar_type']=avatar_type if avatar else None;save()
-            return {'ok':True,'provider':provider,'login':login}
-        identity.sign_out()
-        avatar_path=CACHE/'identity-avatar'
-        if avatar_path.is_file():avatar_path.unlink()
-        with LOCK:
-            for key in ('identity_provider','identity_login','identity_avatar_type'):S['settings'].pop(key,None)
-            save()
-        return {'ok':True}
     if path=='/api/clear-batch':
         with LOCK:
             batch=S['batches'][S['active']]
@@ -963,11 +952,6 @@ class Handler(BaseHTTPRequestHandler):
             if self.headers.get('Host','').split(':')[0] not in ('127.0.0.1','localhost'):return self.send({'error':'Local access only'},403)
             if p=='/api/state':return self.send(state(settings_only=qs.get('view')=='settings'))
             if p=='/api/ping':return self.send(dict(app='Clarette',version=VERSION))
-            if p=='/api/identity-avatar':
-                avatar_path=CACHE/'identity-avatar'
-                if not avatar_path.is_file():return self.send({'error':'Not found'},404)
-                with LOCK:kind=S['settings'].get('identity_avatar_type') or 'image/jpeg'
-                return self.send(avatar_path.read_bytes(),kind=kind)
             if p=='/api/image':
                 with LOCK:_,f=getfile(qs);f=copy.deepcopy(f)
                 kind=qs.get('kind','work')
