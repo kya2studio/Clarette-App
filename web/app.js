@@ -19,7 +19,14 @@ async function refresh(force=false){const r=await fetch('/api/state');if(!r.ok)t
  if(!batch?.files.length){++previewSequence;current=null;selected=null;workImg=null;preview=null;cutPreview=null;maskImg=null;$('empty').hidden=false;$('filename').textContent='Your next headshot starts here';$('filePosition').textContent='Import a ZIP or images to begin';$('sourceSize').textContent='—';$('loupe').hidden=true;draw();flushCompletionSounds();return}
  const f=batch.files.find(x=>x.id===selected)||batch.files[0];const change=force||!current||f.id!==current.id||f.revision!==current.revision||f.work_stamp!==current.work_stamp;
  if(change&&!editPending&&!drag){selected=f.id;current=clone(f);draft=clone(f.draft||f.color);await loadSelected();renderBatch()}
+ await syncVoiceSelection();
  flushCompletionSounds();
+}
+async function syncVoiceSelection(){
+ if(!batch||!current||busy||current.batch!==batch.id||!batch.files.some(f=>f.id===current.id)||batch.selected_id===current.id)return;
+ const target=batch,id=current.id;
+ await api('/api/selection',{batch:target.id,id});
+ target.selected_id=id;
 }
 function renderBatch(){const signature=JSON.stringify([app.active,selected,Object.values(app.batches).map(b=>[b.id,b.name]),(batch?.files||[]).map(f=>[f.id,f.name,f.width,f.height,f.revision,f.work_stamp,f.saved,f.pending_color,f.mask_applied,f.mask])]);if(renderBatch.signature===signature)return;renderBatch.signature=signature;const select=$('batchSelect');select.replaceChildren();for(const b of Object.values(app.batches)){const o=new Option(b.name,b.id,b.id===app.active,b.id===app.active);select.add(o)}
  const queueScroll={top:$('queue').scrollTop,left:$('queue').scrollLeft};$('queue').replaceChildren();const files=batch?.files||[];$('batchCount').textContent='Portraits · '+files.length;$('savedCount').textContent=files.length?files.filter(f=>f.saved).length+' saved · '+files.length+' images':'No images yet';
