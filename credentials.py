@@ -7,7 +7,7 @@ def api():
     return Security
 
 def query(provider):
-    if provider not in ('openai','gemini','seedream','github'):raise ValueError('Unknown provider')
+    if provider not in ('openai','gemini','seedream','github','google'):raise ValueError('Unknown provider')
     s=api();return {s.kSecClass:s.kSecClassGenericPassword,s.kSecAttrService:SERVICE,s.kSecAttrAccount:provider}
 
 def set_key(provider,value):

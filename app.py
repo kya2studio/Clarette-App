@@ -497,28 +497,30 @@ def action(path,d):
     if path=='/api/test-connection':
         from cloud import test_connection
         return test_connection(d.get('provider'))
-    if path=='/api/github-signin-start':
-        import github_auth
-        device=github_auth.start()
-        webbrowser.open(device['verification_uri'])
-        return {'user_code':device['user_code'],'verification_uri':device['verification_uri'],'device_code':device['device_code'],'interval':device.get('interval',5),'expires_in':device.get('expires_in',900)}
-    if path=='/api/github-signin-wait':
-        import github_auth
-        from credentials import set_key
-        token=github_auth.wait_for_token(d.get('device_code'),d.get('interval'),d.get('expires_in'))
-        login,avatar,avatar_type=github_auth.fetch_profile(token)
-        set_key('github',token)
-        if avatar:(CACHE/'github-avatar').write_bytes(avatar)
-        with LOCK:
-            S['settings']['github_login']=login;S['settings']['github_avatar_type']=avatar_type if avatar else None;save()
-        return {'ok':True,'login':login}
-    if path=='/api/github-signout':
-        import github_auth
-        github_auth.sign_out()
-        avatar_path=CACHE/'github-avatar'
+    if path in ('/api/identity-signin-start','/api/identity-signin-wait','/api/identity-signout'):
+        import github_auth,google_auth
+        provider=d.get('provider')
+        identity={'github':github_auth,'google':google_auth}.get(provider)
+        if not identity:raise ValueError('Unknown sign-in provider')
+        if path=='/api/identity-signin-start':
+            device=identity.start()
+            webbrowser.open(device['verification_uri'])
+            return {'user_code':device['user_code'],'verification_uri':device['verification_uri'],'device_code':device['device_code'],'interval':device.get('interval',5),'expires_in':device.get('expires_in',900)}
+        if path=='/api/identity-signin-wait':
+            from credentials import set_key
+            token=identity.wait_for_token(d.get('device_code'),d.get('interval'),d.get('expires_in'))
+            login,avatar,avatar_type=identity.fetch_profile(token)
+            set_key(provider,token)
+            if avatar:(CACHE/'identity-avatar').write_bytes(avatar)
+            with LOCK:
+                S['settings']['identity_provider']=provider;S['settings']['identity_login']=login;S['settings']['identity_avatar_type']=avatar_type if avatar else None;save()
+            return {'ok':True,'provider':provider,'login':login}
+        identity.sign_out()
+        avatar_path=CACHE/'identity-avatar'
         if avatar_path.is_file():avatar_path.unlink()
         with LOCK:
-            S['settings'].pop('github_login',None);S['settings'].pop('github_avatar_type',None);save()
+            for key in ('identity_provider','identity_login','identity_avatar_type'):S['settings'].pop(key,None)
+            save()
         return {'ok':True}
     if path=='/api/clear-batch':
         with LOCK:
@@ -961,10 +963,10 @@ class Handler(BaseHTTPRequestHandler):
             if self.headers.get('Host','').split(':')[0] not in ('127.0.0.1','localhost'):return self.send({'error':'Local access only'},403)
             if p=='/api/state':return self.send(state(settings_only=qs.get('view')=='settings'))
             if p=='/api/ping':return self.send(dict(app='Clarette',version=VERSION))
-            if p=='/api/github-avatar':
-                avatar_path=CACHE/'github-avatar'
+            if p=='/api/identity-avatar':
+                avatar_path=CACHE/'identity-avatar'
                 if not avatar_path.is_file():return self.send({'error':'Not found'},404)
-                with LOCK:kind=S['settings'].get('github_avatar_type') or 'image/jpeg'
+                with LOCK:kind=S['settings'].get('identity_avatar_type') or 'image/jpeg'
                 return self.send(avatar_path.read_bytes(),kind=kind)
             if p=='/api/image':
                 with LOCK:_,f=getfile(qs);f=copy.deepcopy(f)
