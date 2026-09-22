@@ -30,7 +30,7 @@ def defaults():
                 masking_enabled=True, solid_preview=False, preview_background='#00a84f', checker_brightness=35,
                 cutout_format='PNG', photo_format='JPEG', jpeg_quality=95, tiff_compression='tiff_lzw',
                 embed_profile=True, metadata_mode='preserve', processing_metadata=False, print_profile='',
-                enhancement_prompt='', restore_location='', hypir_location='', osediff_location='', flowsr_location='', seesr_location='', enhancement_provider='classical', toolbar_apps=['photoshop'],
+                enhancement_prompt='', restore_location='', hypir_location='', osediff_location='', flowsr_location='', seesr_location='', enhancement_provider='classical', toolbar_apps=['photoshop'], toolbar_tools=['chatgpt','gemini','prompt'],
                 openai_model='gpt-image-2.5-sunburst', gemini_model='gemini-3.1-flash-image', seedream_model='dola-seedream-5-0-pro-260628')
 
 def validate_settings(values, previous=None):
@@ -56,6 +56,7 @@ def validate_settings(values, previous=None):
     for key in ('openai_model','gemini_model','seedream_model'):
         if not re.fullmatch(r'[a-zA-Z0-9_.-]{1,100}',result[key]):raise ValueError('Enter a valid image model ID')
     if not re.fullmatch('#[a-fA-F0-9]{6}',result['preview_background']): raise ValueError('Choose a valid preview color')
+    if not isinstance(result['toolbar_tools'],list) or any(x not in ('chatgpt','gemini','prompt') for x in result['toolbar_tools']): raise ValueError('Invalid toolbar tool')
     if not isinstance(result['toolbar_apps'],list) or any(x not in ('photoshop','affinity','photos') for x in result['toolbar_apps']): raise ValueError('Invalid external application')
     return result
 
@@ -96,10 +97,10 @@ def validate_workspace2(value):
         layout=validate_dockview_layout(item.get('layout'))
         based_on=item.get('basedOn')
         if based_on is not None and based_on not in WORKSPACE_PRESETS: based_on=None
-        custom[key]=dict(name=name,layout=layout,basedOn=based_on)
+        custom[key]=dict(name=name,layout=layout,basedOn=based_on,explicit=bool(item.get("explicit",False)))
     active=value.get('active')
     if not isinstance(active,str) or (active not in WORKSPACE_PRESETS and active not in custom): raise ValueError('Invalid active workspace')
-    return dict(schema=2,active=active,locked=bool(value.get('locked',False)),custom=custom)
+    return migrate_workspace_autosaves(dict(schema=2,active=active,locked=bool(value.get('locked',False)),custom=custom,autosaved=validate_autosaved(value.get('autosaved',{}))))
 
 def recover_workspace2(value):
     """Preserve valid customized workspace layouts; fall back to the default preset otherwise.
@@ -124,14 +125,16 @@ def recover_workspace2(value):
                 layout=validate_dockview_layout(item.get('layout'))
                 based_on=item.get('basedOn')
                 if based_on is not None and based_on not in WORKSPACE_PRESETS: based_on=None
-                custom[key]=dict(name=name,layout=layout,basedOn=based_on)
+                custom[key]=dict(name=name,layout=layout,basedOn=based_on,explicit=bool(item.get("explicit",False)))
             except (TypeError,ValueError,OverflowError): repaired=True
     else: repaired=True
     active=value.get('active')
     if not isinstance(active,str) or (active not in WORKSPACE_PRESETS and active not in custom): active='landscape';repaired=True
     locked=value.get('locked',False)
     if type(locked) is not bool: locked=bool(locked);repaired=True
-    return dict(schema=2,active=active,locked=locked,custom=custom),repaired
+    try: autosaved=validate_autosaved(value.get('autosaved',{}))
+    except (TypeError,ValueError):autosaved={};repaired=True
+    return migrate_workspace_autosaves(dict(schema=2,active=active,locked=locked,custom=custom,autosaved=autosaved)),repaired
 
 def recover_settings(value):
     """Keep individually valid preferences from an untrusted saved session."""
@@ -193,3 +196,20 @@ def portable(state):
     return dict(format='clarette-preferences',version=2,settings=settings,
                 workspace2=copy.deepcopy(state.get('workspace2',default_workspace2())),
                 presets=copy.deepcopy(state['presets']),shortcuts=copy.deepcopy(state.get('shortcuts',{})))
+
+
+def validate_autosaved(value):
+    if not isinstance(value,dict):raise ValueError('Invalid workspace autosave')
+    return {key:validate_dockview_layout(layout) for key,layout in value.items() if key in WORKSPACE_PRESETS}
+
+def migrate_workspace_autosaves(ws):
+    """Old automatic forks become unnamed resume layouts, never saved menu items."""
+    autosaved=ws.setdefault('autosaved',{})
+    active=ws['active']
+    for key,item in list(ws['custom'].items()):
+        if item['name']=='Custom Layout' and item.get('basedOn') and not item.get('explicit'):
+            preset=item['basedOn']
+            if preset not in autosaved or key==active:autosaved[preset]=item['layout']
+            if key==active:ws['active']=preset
+            del ws['custom'][key]
+    return ws

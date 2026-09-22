@@ -514,3 +514,40 @@ def refine_edges(im,mask,radius=8,decontaminate=True,report=lambda s:None):
     refined=Image.fromarray(np.uint8(np.rint(np.clip(result,0,1)*255)))
     corrected=Image.fromarray(np.uint8(np.rint(np.clip(colors,0,1)*255))).convert('RGBA');corrected.putalpha(im.getchannel('A'))
     return corrected,refined
+
+
+def refine_transparent(im,mask,radius=8,decontaminate=True):
+    """An already-transparent import has no background to solve. Preserve its alpha,
+    and remove RGB fringes using the nearest confidently opaque foreground."""
+    import cv2
+    a=np.minimum(np.asarray(mask),np.asarray(im.getchannel('A')))
+    rgb=np.asarray(im.convert('RGB')).copy()
+    solid=a>=250
+    if decontaminate and np.any(solid):
+        from scipy.ndimage import distance_transform_edt
+        distances,indices=distance_transform_edt(~solid,return_indices=True)
+        edge=(a>0)&(a<250)&(distances<=max(1,min(30,int(radius))))
+        rgb[edge]=rgb[indices[0][edge],indices[1][edge]]
+    result=Image.fromarray(rgb).convert('RGBA')
+    # Alpha is carried by the editable mask, not multiplied into it twice.
+    return result,Image.fromarray(a)
+
+
+def refine_cutout(im,mask,report=lambda s:None):
+    """Bound automatic matting cost; keep full-resolution interior and edge detail."""
+    import cv2
+    scale=min(1,1024/max(im.size))
+    size=tuple(max(1,round(v*scale)) for v in im.size)
+    small=im.resize(size,Image.Resampling.LANCZOS) if scale<1 else im
+    matte=mask.resize(size,Image.Resampling.LANCZOS) if scale<1 else mask
+    corrected,refined=refine_edges(small,matte,radius=max(2,round(4*scale)),decontaminate=True,report=report)
+    if scale==1:return corrected,refined
+    # Transfer the matting correction, retaining the original mask's fine structure.
+    delta=(np.asarray(refined,dtype=np.float32)-np.asarray(matte,dtype=np.float32))
+    alpha=np.clip(np.asarray(mask,dtype=np.float32)+cv2.resize(delta,im.size,interpolation=cv2.INTER_LINEAR),0,255)
+    delta_rgb=np.asarray(corrected.convert('RGB'),dtype=np.float32)-np.asarray(small.convert('RGB'),dtype=np.float32)
+    delta_rgb=cv2.resize(delta_rgb,im.size,interpolation=cv2.INTER_LINEAR)
+    edge=(alpha>1)&(alpha<254)
+    rgb=np.asarray(im.convert('RGB'),dtype=np.float32)
+    rgb[edge]+=delta_rgb[edge]
+    return Image.fromarray(np.uint8(np.rint(np.clip(rgb,0,255)))).convert('RGBA'),Image.fromarray(np.uint8(np.rint(alpha)))

@@ -103,9 +103,10 @@ def worker_main():
                 result={'faces':imaging.faces(im,models,report)}
             elif op=='/api/mask-detect':
                 matte=imaging.segment(im,models,d['model'],report,d.get('accelerate',False));result={}
-                if d.get('quality_cutout',False) and im.getchannel('A').getextrema()[0]==255:
+                if d.get('quality_cutout',False):
                     try:
-                        _,matte=imaging.refine_edges(im,matte,radius=4,decontaminate=False,report=report)
+                        rgb,matte=imaging.refine_cutout(im,matte,report=report) if im.getchannel('A').getextrema()[0]==255 else imaging.refine_transparent(im,matte,radius=4)
+                        rgb.save(out/'work.png');result['work']=str(out/'work.png')
                     except ValueError as error:
                         report('Keeping detected mask: '+str(error))
                 matte.save(out/'mask.png');result['mask']=str(out/'mask.png')
@@ -116,7 +117,7 @@ def worker_main():
             elif op=='/api/mask-paint':
                 report('Updating mask…');matte=imaging.paint(im,m,d.get('strokes',[]));matte.save(out/'mask.png');result={'mask':str(out/'mask.png')}
             elif op=='/api/refine-edges':
-                rgb,matte=imaging.refine_edges(imaging.color(im,d['color']),m,d.get('radius',8),d.get('decontaminate',True),report)
+                rgb,matte=imaging.refine_transparent(im,m,d.get('radius',8),d.get('decontaminate',True)) if d.get('transparent_refine') else imaging.refine_edges(imaging.color(im,d['color']),m,d.get('radius',8),d.get('decontaminate',True),report)
                 rgb.save(out/'work.png');matte.save(out/'mask.png');result={'work':str(out/'work.png'),'mask':str(out/'mask.png')}
             elif op=='/api/enhance':
                 if d.get('enhancement_provider')=='hypir':

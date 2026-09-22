@@ -290,14 +290,17 @@ function hideSampleRing() { sampleRing.hidden = true; }
 function startSampling() {
   if (sampling) return;
   sampling = true;
+  canvas.dataset.colorSampling='true';
   eyedropper.classList.add('active');
   canvas.style.cursor = EYEDROPPER_CURSOR;
 }
 function stopSampling() {
   if (!sampling) return;
   sampling = false;
+  delete canvas.dataset.colorSampling;
   eyedropper.classList.remove('active');
   canvas.style.cursor = '';
+  updateBrushCursor();
   loupe.hidden = true;
   hideSampleRing();
 }

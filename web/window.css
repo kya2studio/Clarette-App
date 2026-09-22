@@ -75,3 +75,10 @@ body.compactWindow main{overflow:auto;padding:16px 18px}body.compactWindow #shel
    without error; they just no longer take up space or render. */
 main>header{display:none!important}
 #windowClose{display:none!important}
+
+/* Batch dialogs size to their contents, with one aligned input row. */
+body[data-kind="new-batch"] main,body[data-kind="rename-batch"] main{padding:14px 16px!important}
+body[data-kind="new-batch"] label.column,body[data-kind="rename-batch"] label.column{display:flex;margin:0;gap:12px}
+body[data-kind="new-batch"] #name,body[data-kind="rename-batch"] #name{flex:1;width:0;max-width:none;margin:0}
+body[data-kind="new-batch"] #content>p{margin:14px 0 7px}
+body[data-kind="new-batch"] .row{flex-wrap:nowrap}

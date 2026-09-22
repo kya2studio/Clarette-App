@@ -289,10 +289,9 @@ def state(settings_only=False):
 
 def notify(message):
     if platform.system()!='Darwin' or not WINDOW:return
-    from notifications import send,play_sound
+    from notifications import send
     try:
-        if S['settings'].get('notifications'):send(message,sound=bool(S['settings'].get('notification_sound')))
-        elif S['settings'].get('notification_sound'):play_sound()
+        if S['settings'].get('notifications'):send(message,sound=False)
     except Exception:traceback.print_exc()
 
 def start_job(title,fn):
@@ -442,6 +441,16 @@ def thumbnail(path,stamp):
     im=imaging.load(path);im.thumbnail((80,80));return imaging.png(im)
 
 def action(path,d):
+    if path=='/api/job-presented':
+        with LOCK:
+            job=JOBS.get(d.get('job'))
+            if not job or job['status'] not in ('done','error') or job.get('presentation_acknowledged'):return {'ok':True}
+            job['presentation_acknowledged']=True
+            play=bool(WINDOW and S['settings'].get('notification_sound'))
+        if play:
+            from notifications import play_sound
+            threading.Thread(target=play_sound,daemon=True).start()
+        return {'ok':True}
     if path in ('/api/mask-detect','/api/mask-paint','/api/mask-apply','/api/refine-edges','/api/apply-cutouts') and not S['settings'].get('masking_enabled',True):raise ValueError('Enable Mask first')
     # Native dialogs/network calls must not hold the image state lock.
     if path in ('/api/choose-path','/api/save-document','/api/provider-models','/api/window','/api/close-window','/api/quit','/api/cancel','/api/storage','/api/check-updates','/api/apply-update'):
@@ -483,11 +492,10 @@ def action(path,d):
         with LOCK:
             batch=S['batches'][S['active']]
             if any(not saved(f) for f in batch['files']) and not d.get('confirm_unsaved'):raise ValueError('Confirm clearing unsaved portraits')
-            # Keep cleared images in a recoverable closed batch instead of orphaning files.
-            recovery=copy.deepcopy(batch);recovery['name']+=' (cleared)';recovery['closed_at']=time.time()
-            old_id=batch['id'];new_id=ident();batch=copy.deepcopy(batch);batch['id']=new_id
-            S['batches'][old_id]=recovery;S['batches'][new_id]=batch;S['active']=new_id
-            batch['files']=[];save()
+            if any(j['status']=='running' for j in JOBS.values()):raise ValueError('Wait for processing to finish')
+            storage.discard_batch(CACHE,DATA,batch['id'])
+            batch['files']=[];batch['removed_files']=[];batch.pop('selected_id',None)
+            thumbnail.cache_clear();save()
         return {'ok':True}
     if path=='/api/destination-status':
         with LOCK:
@@ -776,7 +784,23 @@ def action(path,d):
                      'quality_cutout':S['settings'].get('quality_cutout',True),'auto_guide':S['settings'].get('auto_guide',True),'model':S['settings']['model'],'accelerate':S['settings'].get('accelerate',False),
                      'face_restore':S['settings'].get('face_restore',False)}
             request['source']=str(immutable_source)
-            result=ENGINE.call(request,report)
+            if path in ('/api/refine-edges','/api/mask-detect') and reference.getchannel('A').getextrema()[0]<255:
+                original=imaging.load(folder(captured)/captured['original'])
+                region=captured.get('original_region') or [0,0,*original.size]
+                x,y,w,h=region
+                background=original.crop((x,y,x+w,y+h)).resize(reference.size,Image.Resampling.LANCZOS)
+                if background.getchannel('A').getextrema()[0]==255:
+                    restored=Image.alpha_composite(background,reference)
+                    atomic(immutable_source,imaging.png(restored))
+                else:request['transparent_refine']=True
+            detection=captured.get('detection')
+            if not isinstance(detection,dict):detection={}
+            if (path=='/api/mask-detect' and detection.get('stamp')==captured['work_stamp']
+                    and detection.get('model')==request['model'] and detection.get('quality')==request['quality_cutout']
+                    and _safe_relative(detection.get('mask')) and (folder(captured)/detection['mask']).is_file()):
+                report('Restoring cached subject detection…')
+                result={'mask':str(folder(captured)/detection['mask'])}
+            else:result=ENGINE.call(request,report)
             report.check()
             newmask=Image.open(result['mask']).convert('L') if result.get('mask') else None
             processed=imaging.load(result['work']) if result.get('work') else None
@@ -838,7 +862,9 @@ def action(path,d):
                 previous={k:copy.deepcopy(v) for k,v in live['history'][-1].items() if k!='comparisons'};previous['work']='HISTORY/'+ident()+'.png';atomic(folder(live)/previous['work'],(folder(live)/live['work']).read_bytes());live['comparisons']=live.get('comparisons') or {};live['comparisons']['refinement']=previous
             if path=='/api/mask-detect' and result.get('faces') and result['faces'][0]['h']/captured['height']<.22:
                 live['crop_suggestion']={'face':result['faces'][0],'full_body_likely':True}
-            name='MASKS/'+ident()+'.png';atomic(folder(live)/name,imaging.png(newmask));live['mask']=name;live['mask_applied']=False;touch(live);save()
+            name='MASKS/'+ident()+'.png';atomic(folder(live)/name,imaging.png(newmask));live['mask']=name;live['mask_applied']=False
+            if path=='/api/mask-detect':live['detection']={'stamp':live['work_stamp'],'model':request['model'],'quality':request['quality_cutout'],'mask':name}
+            touch(live);save()
         return {'mask':True}
     return start_job({'/api/detect':'Auto Fit','/api/crop-suggest':'Suggest headshot','/api/mask-detect':'Detect subject','/api/mask-paint':'Refine mask','/api/enhance':'Enhance detail','/api/refine-edges':'Refine edges','/api/color-auto':'Auto Color','/api/cloud-enhance':'Cloud enhancement'}.get(path,'Process image'),work)
 
@@ -933,7 +959,7 @@ class Handler(BaseHTTPRequestHandler):
             d=json.loads(self.rfile.read(n) or b'{}');p=urllib.parse.urlparse(self.path).path
             if p=='/api/quit':return self.send(action(p,d))
             with LOCK:
-                if any(j['status']=='running' for j in JOBS.values()) and p not in ('/api/open','/api/cancel','/api/quit'):raise ValueError('An operation is running. Please wait before making changes.')
+                if any(j['status']=='running' for j in JOBS.values()) and p not in ('/api/open','/api/cancel','/api/quit','/api/job-presented'):raise ValueError('An operation is running. Please wait before making changes.')
             return self.send(action(p,d))
         except Exception as e:
             traceback.print_exc();return self.send({'error':str(e)},400)
@@ -987,15 +1013,25 @@ def main():
     if args.native:
         import webview
         threading.Thread(target=SERVER.serve_forever,daemon=True).start()
-        WINDOW=webview.create_window('Clarette · Headshot Workflow',url,width=1500,height=1000,min_size=(1100,740),background_color='#17191f',confirm_close=False)
+        geometry={}
+        try:
+            geometry=json.loads((DATA/'window.json').read_text())
+            geometry={k:max(low,min(10000,int(geometry[k]))) for k,low in (('width',1100),('height',740))}
+        except (OSError,ValueError,TypeError,KeyError):geometry={'width':1500,'height':1000}
+        WINDOW=webview.create_window('Clarette · Headshot Workflow',url,width=geometry['width'],height=geometry['height'],min_size=(1100,740),background_color='#17191f',confirm_close=False)
+        def resized(width,height):
+            geometry.update(width=width,height=height)
+        WINDOW.events.resized+=resized
         def closing():
+            try:atomic(DATA/'window.json',json.dumps(geometry).encode())
+            except (OSError,TypeError):pass
             # Never open nested native dialogs while Cocoa is closing the window.
             request_shutdown()
             import native
             native.close_auxiliary_windows()
             return True
         WINDOW.events.closing+=closing
-        WINDOW.events.closed+=closing
+        WINDOW.events.closed+=request_shutdown
         try:
             import native
             webview.start(lambda:native.install(sys.modules[__name__],url),private_mode=False,storage_path=str(CACHE/'webview'))

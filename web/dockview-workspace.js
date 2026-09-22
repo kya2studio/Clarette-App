@@ -365,7 +365,7 @@ function debounce(fn, ms) {
 const saveLayout = debounce(guarded(async () => {
   if (applyingRemote) return;
   const layout = dv.toJSON();
-  const result = await api('/api/workspace', { operation: 'save', layout });
+  const result = await api('/api/workspace', { operation: 'autosave', id: app?.workspace2?.active, layout });
   signature = JSON.stringify([result.active, !!app?.workspace2?.locked]);
 }), 700);
 
@@ -381,11 +381,11 @@ function applyWorkspaceState(ws, force) {
   withRemoteGuard(() => {
     dv.updateOptions({ disableDnd: !!ws.locked });
     layoutEl.classList.toggle('layoutLocked', !!ws.locked);
-    if (PRESET_KEYS.includes(ws.active)) {
+    if (PRESET_KEYS.includes(ws.active) && !ws.autosaved?.[ws.active]) {
       buildPreset(ws.active);
       return;
     }
-    const custom = ws.custom && ws.custom[ws.active];
+    const custom = ws.custom?.[ws.active] || (ws.autosaved?.[ws.active] ? {layout:ws.autosaved[ws.active]} : null);
     if (!custom) { buildPreset('landscape'); return; }
     stageAll();
     try { const saved=structuredClone(custom.layout);

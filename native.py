@@ -74,14 +74,14 @@ def open_window(app,kind,payload=None):
             try:_windows[kind].destroy()
             except Exception:pass
             _windows.pop(kind,None)
-    sizes={'settings':(900,760),'shortcuts':(760,680),'help':(680,600),'export':(490,490),'preset':(400,330),'rename-batch':(400,200),'new-batch':(460,300),'workspace':(400,220),'updates':(420,230)}
+    sizes={'settings':(900,760),'shortcuts':(760,680),'help':(680,600),'export':(490,490),'preset':(400,330),'rename-batch':(400,118),'new-batch':(460,186),'workspace':(400,220),'updates':(420,230)}
     width,height=sizes.get(kind,(440,320))
     titles={'settings':'Settings','shortcuts':'Keyboard Shortcuts','help':'Documentation & Tutorials','new-batch':'New Batch','rename-batch':'Rename Batch','export':'Export Finals','preset':'Output Preset','workspace':'Workspace','updates':'Check for Updates'}
     # frameless=False (a real, native title bar) is deliberate: see the comment in
     # configure_floating below for why. easy_drag only matters when frameless=True.
     # height includes an extra NATIVE_CHROME for the native title bar itself (see
     # fit_window below for why that's needed).
-    window=webview.create_window(titles.get(kind,kind.replace('-',' ').title()),url,width=width,height=height+NATIVE_CHROME,min_size=(width,150),resizable=False,frameless=False,background_color='#20232d',on_top=False)
+    window=webview.create_window(titles.get(kind,kind.replace('-',' ').title()),url,width=width,height=height+NATIVE_CHROME,min_size=(width,100),resizable=False,frameless=False,background_color='#20232d',on_top=False)
     configured={'done':False}
     def configure_floating():
         # Reusing a window (show()/restore()) re-fires the 'shown' event this is bound
@@ -229,4 +229,4 @@ def install(app,url):
 def fit_window(kind,height):
     if kind in ('settings','shortcuts','help'):return
     window=_windows.get(kind)
-    if window:window.resize(window.width,max(150,min(900,int(height)+NATIVE_CHROME)))
+    if window:window.resize(window.width,max(100,min(900,int(height)+NATIVE_CHROME)))

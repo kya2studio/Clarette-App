@@ -89,3 +89,24 @@ def migrate(data,cache,state):
             shutil.copytree(old,stage,symlinks=False)
             stage.rename(new)
     return state
+
+
+def discard_batch(cache,data,bid):
+    """Permanently remove owned pixels; never follow paths from image/export records."""
+    import json
+    if not isinstance(bid,str) or Path(bid).name!=bid or bid in ('.','..'):raise ValueError('Invalid batch id')
+    roots=[Path(cache)/'batches'/bid,Path(data)/'batches'/bid]
+    roots += [Path(cache)/name for name in ('mask-cache','upscale-cache','previews')]
+    for root in roots:
+        if root.is_symlink() or root.parent.is_symlink():raise ValueError('Unsafe managed cache path')
+    for root in roots:
+        if root.is_dir():shutil.rmtree(root)
+    # Recovery metadata must not resurrect deliberately discarded batches.
+    for path in Path(data).glob('session-recovery-*.json'):
+        if path.is_symlink():continue
+        try:record=json.loads(path.read_text())
+        except (OSError,ValueError):continue
+        if isinstance(record,dict) and isinstance(record.get('batches'),dict) and bid in record['batches']:
+            record['batches'].pop(bid)
+            if record.get('active')==bid:record['active']=None
+            temporary=path.with_suffix('.tmp');temporary.write_text(json.dumps(record));temporary.replace(path)

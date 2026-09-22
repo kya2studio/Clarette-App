@@ -127,7 +127,14 @@ def handle(a,path,d):
     if path=='/api/provider-models':
         import cloud
         return cloud.test_connection(d['provider'])
-    if path=='/api/new-batch': return {'batch':new_batch(a,d.get('name'),d.get('output'))['id']}
+    if path=='/api/new-batch':
+        if any(j['status']=='running' for j in a.JOBS.values()):raise ValueError('Wait for processing to finish')
+        previous=a.S.get('active')
+        result=new_batch(a,d.get('name'),d.get('output'))
+        if previous:
+            storage.discard_batch(a.CACHE,a.DATA,previous)
+            a.S['batches'].pop(previous,None);a.thumbnail.cache_clear();a.save()
+        return {'batch':result['id']}
     if path=='/api/rename-batch':
         b=a.S['batches'][a.S['active']];b['name']=batch_name(d['name']);b['subfolder']=b['name'];a.save();return {'ok':True}
     if path=='/api/batch-folder':
@@ -153,6 +160,12 @@ def handle(a,path,d):
             key=d.get('id')
             if key not in preferences.WORKSPACE_PRESETS and key not in ws['custom']: raise ValueError('Workspace not found')
             ws['active']=key
+        elif op=='autosave':
+            if ws.get('locked'):return {'active':ws['active']}
+            if d.get('id')!=ws['active']:return {'active':ws['active']}
+            layout=preferences.validate_dockview_layout(d['layout'])
+            if ws['active'] in preferences.WORKSPACE_PRESETS:ws.setdefault('autosaved',{})[ws['active']]=layout
+            else:ws['custom'][ws['active']]['layout']=layout
         elif op in ('save','create'):
             # 'save' while a built-in preset is active forks it into a new custom
             # workspace (presets stay protected); 'save' while already on a custom
@@ -168,7 +181,7 @@ def handle(a,path,d):
                 if op=='save' and ws.get('locked'): raise ValueError('Unlock the workspace to save changes')
                 key=a.ident();name=str(d.get('name','')).strip() or 'Custom Layout'
                 based_on=ws['active'] if ws['active'] in preferences.WORKSPACE_PRESETS else None
-                ws['custom'][key]=dict(name=name,layout=layout,basedOn=based_on);ws['active']=key
+                ws['custom'][key]=dict(name=name,layout=layout,basedOn=based_on,explicit=True);ws['active']=key
             else:
                 if ws.get('locked'): raise ValueError('Unlock the workspace to save changes')
                 key=ws['active'];ws['custom'][key]=dict(ws['custom'][key],layout=layout)
@@ -182,12 +195,13 @@ def handle(a,path,d):
             del ws['custom'][ws['active']];ws['active']='landscape'
         elif op=='lock': ws['locked']=bool(d.get('locked'))
         elif op=='reset':
+            ws.setdefault('autosaved',{}).pop(ws['active'],None)
             # Discard customizations to the current layout, reverting to the preset it
             # forked from (or the default, if it wasn't a fork of anything in particular).
             if ws['active'] in ws['custom']:
                 based_on=ws['custom'][ws['active']].get('basedOn') or 'landscape'
                 del ws['custom'][ws['active']];ws['active']=based_on
-        elif op=='restore-default': ws['active']='landscape'
+        elif op=='restore-default': ws['active']='landscape';ws['autosaved']={}
         else: raise ValueError('Unknown workspace operation')
         a.S['workspace2']=preferences.validate_workspace2(ws);a.save()
         import native

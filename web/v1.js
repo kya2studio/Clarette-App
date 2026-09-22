@@ -46,7 +46,32 @@ $('enhance').onclick=guarded(async()=>{
 $('detailAmount').value=35;$('detailAmountOut').textContent='35';detailHelp.remove();
 // Polygonal Lasso: persistent vertices; no mask mutation before Accept.
 let polygon=null,polygonDrag=null;
-const polygonActions=document.createElement('div');polygonActions.id='polygonActions';polygonActions.hidden=true;polygonActions.innerHTML='<span id="polygonHint">Click points; click the first vertex or Enter to close.</span><button id="polygonAccept" class="primary">Accept</button><button id="polygonCancel">Cancel</button>';document.querySelector('.maskToolOptions').after(polygonActions);
+const polygonActions=document.createElement('div');polygonActions.id='polygonActions';polygonActions.hidden=true;polygonActions.innerHTML='<span id="polygonHint">Click points; click the first vertex or Enter to close.</span><button id="polygonAccept" class="primary">Accept</button><button id="polygonCancel">Cancel</button>';document.querySelector('.editorHead').append(polygonActions);polygonActions.setAttribute('role','group');polygonActions.setAttribute('aria-label','Polygonal Lasso actions');polygonActions.title='Click to draw. Command-click adds a point; Option-click removes a point. Enter closes the polygon.';
+const lassoKeys={add:false,remove:false};
+function makeLassoCursor(symbol){
+ const badge=symbol?`<circle cx="25" cy="7" r="6" fill="#17191f" stroke="#dfd0ff"/><path d="M22 7h6${symbol==='+'?'M25 4v6':''}" stroke="#ffffff" stroke-width="1.5"/>`:'';
+ const path='M7 23C1 21 2 13 6 10C10 6 22 8 23 14C24 20 16 25 9 23C5 22 6 19 9 20C13 21 9 29 5 30';
+ return `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="${path}" fill="none" stroke="#17191f" stroke-width="4"/><path d="${path}" fill="none" stroke="#e4d4ff" stroke-width="1.7"/>${badge}</svg>`)}") 7 23, crosshair`;
+}
+const lassoCursors={normal:makeLassoCursor(''),add:makeLassoCursor('+'),remove:makeLassoCursor('-')};
+const previousBrushCursor=updateBrushCursor;
+updateBrushCursor=function(){
+ previousBrushCursor();
+ const active=brush==='lasso'&&!!current&&!guideEditing;
+ polygonActions.hidden=!active;
+ $('polygonAccept').disabled=busy||!polygon?.closed;
+ $('polygonCancel').disabled=busy;
+ const c=$('mainCanvas');
+ if(c.dataset.colorSampling)return;
+ if(active&&!busy){c.style.cursor=lassoCursors[lassoKeys.remove?'remove':lassoKeys.add?'add':'normal'];c.dataset.lassoCursor=lassoKeys.remove?'remove':lassoKeys.add?'add':'normal'}
+ else if(c.dataset.lassoCursor){c.style.cursor='';delete c.dataset.lassoCursor}
+};
+function updateLassoKeys(e){lassoKeys.add=e.metaKey;lassoKeys.remove=e.altKey;updateBrushCursor()}
+document.addEventListener('keydown',updateLassoKeys);
+document.addEventListener('keyup',updateLassoKeys);
+window.addEventListener('blur',()=>{lassoKeys.add=false;lassoKeys.remove=false;updateBrushCursor()});
+$('mainCanvas').addEventListener('pointermove',updateLassoKeys);
+
 function cancelPolygon(){polygon=null;polygonDrag=null;stroke=null;polygonActions.hidden=true;draw()}
 function closePolygon(){if(!polygon||polygon.points.length<3)return;polygon.closed=true;$('polygonAccept').disabled=false;$('polygonHint').textContent='Drag vertices; click a segment to insert. Delete removes the selected vertex.';draw()}
 $('polygonCancel').onclick=cancelPolygon;$('polygonAccept').onclick=guarded(async()=>{if(!polygon?.closed)return;const points=clone(polygon.points);await flush();await api('/api/mask-paint',context({strokes:[{mode:$('lassoMode').value,shape:'polygon',points,feather:+$('lassoFeather').value}]}));cancelPolygon();await refresh()});
@@ -56,17 +81,21 @@ $('mainCanvas').onpointerdown=e=>{
  if(brush==='rotate'){if(current.position_locked)return;const g=geometry($('mainCanvas'));drag={rotate:true,x:e.clientX,rotation:current.transform.rotation||0};$('mainCanvas').setPointerCapture(e.pointerId);return}
  if(brush!=='lasso')return downV1(e);
  e.preventDefault();const p=sourcePoint(e);if(p.some(v=>v<0||v>1))return;
+ if(!polygon&&e.altKey)return;
  if(!polygon){polygon={points:[],closed:false,selected:null};polygonActions.hidden=false;$('polygonAccept').disabled=true}
  const g=geometry($('mainCanvas')),factor=current.transform.scale*g.k;
- const distance=(a,b)=>Math.hypot((a[0]-b[0])*current.width*factor,(a[1]-b[1])*current.height*factor);
- const hit=polygon.points.findIndex(q=>distance(q,p)<10);
- if(hit===0&&!polygon.closed&&polygon.points.length>=3){closePolygon();return}
- if(hit>=0){polygon.selected=hit;polygonDrag=hit;$('mainCanvas').setPointerCapture(e.pointerId)}
- else if(polygon.closed){
-  let inserted=false;
-  for(let i=0;i<polygon.points.length;i++){const a=polygon.points[i],b=polygon.points[(i+1)%polygon.points.length],vx=b[0]-a[0],vy=b[1]-a[1],u=Math.max(0,Math.min(1,((p[0]-a[0])*vx+(p[1]-a[1])*vy)/(vx*vx+vy*vy||1)));if(distance(p,[a[0]+u*vx,a[1]+u*vy])<9){polygon.points.splice(i+1,0,p);polygon.selected=i+1;inserted=true;break}}
-  if(!inserted)polygon.selected=null;
- }else{polygon.points.push(p);polygon.selected=polygon.points.length-1}
+ const action=LassoGeometry.pointAction(polygon,p,current.width*factor,current.height*factor,{add:e.metaKey,remove:e.altKey});
+ if(action.type==='close'){closePolygon();return}
+ if(action.type==='remove'){
+  polygon.points.splice(action.index,1);polygon.selected=null;polygonDrag=null;
+  if(polygon.points.length<3)polygon.closed=false;
+ }else if(action.type==='insert'){
+  polygon.points.splice(action.index,0,p);polygon.selected=action.index;
+ }else if(action.type==='drag'){
+  polygon.selected=action.index;polygonDrag=action.index;$('mainCanvas').setPointerCapture(e.pointerId);
+ }else polygon.selected=null;
+ $('polygonAccept').disabled=!polygon.closed;
+
  draw();
 };
 $('mainCanvas').onpointermove=e=>{if(drag?.inspect)return moveV1(e);if(drag?.rotate){current.transform.rotation=drag.rotation+(e.clientX-drag.x)*.3;draw();return}if(brush==='lasso'&&polygonDrag!==null){polygon.points[polygonDrag]=sourcePoint(e).map(v=>Math.max(0,Math.min(1,v)));draw();return}if(brush==='lasso')return;return moveV1(e)};
@@ -75,7 +104,7 @@ const drawV1=draw;draw=function(){drawV1();if(!polygon||!current)return;const c=
 // The panel host/drag/resize/responsive-reflow system now lives in Dockview
 // (see dockview-workspace.js, loaded after this file) -- it takes over
 // .batch/.editor and the individual Adjustments sections directly.
-const oldRenderV1=renderOutput;renderOutput=function(){oldRenderV1();if(!app)return;$('batchCount').replaceChildren('Portraits',Object.assign(document.createElement('span'),{className:'batchMeta',textContent:' · '+(batch?.files.length||0)+(batch?' · '+batch.name:'')}));$('batchCount').title=batch?.name||'No active batch';for(const [name,b] of Object.entries(externalButtons))b.hidden=!(app.settings.toolbar_apps.includes(name)&&app.external_apps[name]);previewColor.classList.toggle('active',app.settings.preview_color!==false);backgroundToggle.classList.toggle('active',app.settings.solid_preview);backgroundToggle.style.setProperty('--solidPreviewColor',app.settings.preview_background||'#00a84f');syncEnhanceProviders();passportNote.hidden=batch?.canvas.preset_id!=='passport';$('saveCurrentPreset').disabled=!batch||Object.values(app.presets).some(p=>p.width===batch.canvas.width&&p.height===batch.canvas.height&&p.dpi===batch.canvas.dpi);$('matchSource').disabled=!current};
+const oldRenderV1=renderOutput;renderOutput=function(){oldRenderV1();if(!app)return;for(const name of ['chatgpt','gemini','prompt'])$(name==='prompt'?'copyPrompt':name).hidden=!app.settings.toolbar_tools.includes(name);$('batchCount').replaceChildren('Portraits',Object.assign(document.createElement('span'),{className:'batchMeta',textContent:' · '+(batch?.files.length||0)+(batch?' · '+batch.name:'')}));$('batchCount').title=batch?.name||'No active batch';for(const [name,b] of Object.entries(externalButtons))b.hidden=!(app.settings.toolbar_apps.includes(name)&&app.external_apps[name]);previewColor.classList.toggle('active',app.settings.preview_color!==false);backgroundToggle.classList.toggle('active',app.settings.solid_preview);backgroundToggle.style.setProperty('--solidPreviewColor',app.settings.preview_background||'#00a84f');syncEnhanceProviders();passportNote.hidden=batch?.canvas.preset_id!=='passport';$('saveCurrentPreset').disabled=!batch||Object.values(app.presets).some(p=>p.width===batch.canvas.width&&p.height===batch.canvas.height&&p.dpi===batch.canvas.dpi);$('matchSource').disabled=!current};
 const oldLoadV1=loadSelected;loadSelected=async function(){cancelPolygon();await oldLoadV1();renderOutput()};
 for(const [id,button] of Object.entries({'import':'importBtn','clear':'clearPortraits','working':'working','final':'openFinal','undo':'undo','redo':'redo','auto-fit':'autoFit','auto-color':'autoColor','enhance':'enhance','compare':'before','preview-color':'previewColor','transparency':'previewBackground','fit':'homeView','lock':'lockPosition','crop':'crop'}))registerCommand(id,()=>$(button).click());
 for(const kind of ['settings','shortcuts','help','new-batch','rename-batch','export','updates'])registerCommand(kind,()=>openNative(kind));

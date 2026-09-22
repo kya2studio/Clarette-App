@@ -206,3 +206,12 @@ button:focus:not(:focus-visible){outline:none!important;box-shadow:none!importan
    width:100%} plus .batchFoot's align-items:stretch. They shouldn't grow just
    because the panel is wide. */
 .batchFoot button{flex:none!important;width:auto!important;max-width:200px}
+
+/* Lasso actions share the preview information row and stay centered. */
+.editorHead:has(#polygonActions:not([hidden])){display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);flex-wrap:nowrap;gap:8px}
+.editorHead #polygonActions{grid-column:2;grid-row:1;padding:0;gap:6px;white-space:nowrap;justify-self:center}
+.editorHead #polygonHint{display:none}
+.editorHead #polygonActions button{min-height:28px;padding:4px 10px;font-size:11px}
+.editorHead:has(#polygonActions:not([hidden])) .previewHeading{grid-column:1;grid-row:1;min-width:0;overflow:hidden}
+.editorHead:has(#polygonActions:not([hidden])) #canvasSizeBadge{overflow:hidden;text-overflow:ellipsis}
+.editorHead:has(#polygonActions:not([hidden])) .previewHeaderActions{grid-column:3;grid-row:1;justify-self:end;margin-left:0}
