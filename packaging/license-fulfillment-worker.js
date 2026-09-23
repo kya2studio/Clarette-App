@@ -14,13 +14,23 @@
  * One-time setup (free tiers cover low volume):
  *   1. workers.cloudflare.com -> Create a Worker -> paste this file's code
  *      into the online editor (no CLI/build step needed) -> Deploy.
- *   2. In the Worker's Settings > Variables, add two encrypted secrets:
+ *   2. In the Worker's Settings > Variables, add three encrypted secrets:
  *        LICENSE_PRIVATE_KEY  = the same value from your password manager
  *        RESEND_API_KEY       = an API key from resend.com (free tier)
+ *        WEBHOOK_SECRET       = a long random string you make up yourself
  *   3. Gumroad: Settings > Advanced > "Ping" (webhook) URL = this Worker's
- *      URL. Other platforms: point their "order completed" webhook here
- *      and adjust `extractEmail()` below to match their payload shape.
+ *      URL PLUS "?secret=<the same WEBHOOK_SECRET value>". Other platforms:
+ *      point their "order completed" webhook here (with the same ?secret=
+ *      query param) and adjust `extractEmail()` below to match their
+ *      payload shape.
  *   4. Change FROM_EMAIL below to an address/domain verified in Resend.
+ *
+ * Without step 3's secret, anyone who discovers this Worker's URL could POST
+ * any email address to it and receive a free, fully valid license -- and
+ * separately, use it to send emails to arbitrary addresses through your
+ * Resend account. Gumroad's basic ping has no built-in signing, so a shared
+ * secret in the URL is the simplest real protection; never deploy this
+ * without one.
  */
 
 const FROM_EMAIL = 'Clarette <hi@kleberdavila.com>'; // must be a Resend-verified sender
@@ -66,6 +76,10 @@ async function sendLicenseEmail(email, license, resendApiKey) {
 export default {
   async fetch(request, env) {
     if (request.method !== 'POST') return new Response('OK', { status: 200 });
+    const secret = new URL(request.url).searchParams.get('secret');
+    if (!env.WEBHOOK_SECRET || secret !== env.WEBHOOK_SECRET) {
+      return new Response('Forbidden', { status: 403 });
+    }
     try {
       const email = await extractEmail(request);
       const license = await signLicense(email, env.LICENSE_PRIVATE_KEY);

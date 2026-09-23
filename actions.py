@@ -65,6 +65,7 @@ def handle(a,path,d):
         import webbrowser
         url=a.S['settings'].get('purchase_url','').strip()
         if not url:raise ValueError('No purchase link is set yet. Add one in Settings > License.')
+        if not url.lower().startswith(('http://','https://')):raise ValueError('Purchase link must start with http:// or https://')
         webbrowser.open(url);return {'ok':True}
     if path=='/api/feedback':
         import platform,urllib.parse,webbrowser
