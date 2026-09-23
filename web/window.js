@@ -146,7 +146,7 @@ function renderNotes(text){
 const updateIcon='<img src="assets/clarette.svg" class="updateIcon" alt="">';
 function updateHead(title,detail){return `<div class="updateHead">${updateIcon}<div><h1>${esc(title)}</h1><p style="color:#bdb3cf;font-size:12px;margin:2px 0 0">${esc(detail)}</p></div></div>`}
 async function updatesDialog(){
- $('content').innerHTML=updateHead('Checking for updates…','Clarette '+state.version+' · Build '+state.build)+`<div class="buttons">${button('cancel','Close')}</div>`;
+ $('content').innerHTML=`<div class="updateUpToDate">${updateIcon}<h1>Checking for Updates…</h1><div class="updateProgress"><div></div></div><p style="color:#bdb3cf;font-size:12px">Clarette ${esc(state.version)} · Build ${esc(state.build)}</p></div>`+`<div class="buttons">${button('cancel','Cancel')}</div>`;
  $('cancel').onclick=closeDialogWindow;
  let result;
  try{result=await api('/api/check-updates')}catch(e){
@@ -178,14 +178,17 @@ async function dialog(){
  document.body.classList.add('compactWindow');document.body.dataset.kind=kind;const batch=state.batches[state.active];$('title').textContent={'new-batch':'New Batch','rename-batch':'Rename Batch','export':'Export Finals','preset':'Output Preset','workspace':'Workspace','updates':'Check for Updates'}[kind]||kind;
  if(kind==='updates'){await updatesDialog();return}
  let html='';
- if(kind==='new-batch'||kind==='rename-batch')html=`<label class="column">Batch Name<input id="name" class="field" value="${esc(kind==='rename-batch'?batch?.name:'CLA_'+new Date().toLocaleDateString('sv-SE'))}"></label>`+(kind==='new-batch'?`<p>Save To</p><div class="row"><input id="destination" value="${esc(state.settings.final_folder)}">${button('choose','Choose…')}</div>`:'');
+ if(kind==='new-batch'||kind==='rename-batch'){
+  const nameField=`<label class="column">Batch Name<input id="name" class="field" value="${esc(kind==='rename-batch'?batch?.name:'CLA_'+new Date().toLocaleDateString('sv-SE'))}"></label>`;
+  html=kind==='rename-batch'?`<div class="card">${nameField}</div>`:`<div class="card">${nameField}<label>Color Profile<select id="newBatchColorMode"><option value="RGB">RGB</option><option value="CMYK">CMYK</option></select></label><label class="column">Save To<div class="row"><input id="destination" value="${esc(state.settings.final_folder)}">${button('choose','Choose…')}</div></label></div>`;
+ }
  if(kind==='export')html=batch?`<p>${batch.files.length} images · ${esc(batch.name)}</p><p class="path">${esc((batch.output_folder||state.settings.final_folder)+'/'+batch.subfolder)}</p><label>Format<select id="format"><option value="default">Use Settings defaults</option><option>PNG</option><option>JPEG</option><option>TIFF</option></select></label><label>Color Mode<select id="exportColorMode"><option value="RGB" ${batch.color_mode!=='CMYK'?'selected':''}>RGB</option><option value="CMYK" ${batch.color_mode==='CMYK'?'selected':''}>CMYK</option></select></label><label>Apply pending color and masks<input type="checkbox" id="apply" checked></label><label>Flatten transparency onto white<input type="checkbox" id="flatten"></label><label>Replace existing files<input type="checkbox" id="overwrite"></label><p class="hint">JPEG/CMYK canvas margins use white for opaque photos. Source transparency and cutouts require explicit flattening. PNG requires RGB. Each item reports its own export errors.</p>`:'<p>Create a batch and add images first.</p>';
  if(kind==='preset'){const p=state.presets[query.get('id')]||batch?.canvas||{width:2048,height:1024,dpi:72};html=`<label>Preset Name<input id="name" value="${esc(query.get('id')?p.label:'')}"></label>`+['width','height','dpi'].map(k=>`<label>${k==='dpi'?'DPI':k[0].toUpperCase()+k.slice(1)}<input id="${k}" type="number" value="${p[k]}"></label>`).join('');}
  if(kind==='workspace'){const ws=state.workspace2||{active:'landscape',custom:{}};html=`<label>Workspace Name<input id="name" value="${esc(ws.custom[ws.active]?.name||'')}"></label><p class="hint">Renames the current saved workspace.</p>`;}
  $('content').innerHTML=html+`<div class="buttons">${button('cancel','Cancel')}${button('submit',kind==='export'?'Export':kind==='new-batch'?'OK':'Save',true)}</div>`;$('cancel').onclick=closeDialogWindow;
  if($('choose'))$('choose').onclick=safe(async()=>{const r=await api('/api/choose-path',{kind:'folder'});if(r.path)$('destination').value=r.path});
  if($('submit'))$('submit').onclick=safe(async()=>{
-  if(kind==='new-batch')await api('/api/new-batch',{name:$('name').value,output:$('destination').value});
+  if(kind==='new-batch'){await api('/api/new-batch',{name:$('name').value,output:$('destination').value});if($('newBatchColorMode').value==='CMYK')await api('/api/color-mode',{mode:'CMYK'});}
   if(kind==='rename-batch')await api('/api/rename-batch',{name:$('name').value});
   if(kind==='export'){if(!batch)throw Error('No active batch');await api('/api/color-mode',{mode:$('exportColorMode').value});await api('/api/export',{format:$('format').value,apply_all:$('apply').checked,flatten:$('flatten').checked,overwrite:$('overwrite').checked});}
   if(kind==='preset'){const p={label:$('name').value,width:+$('width').value,height:+$('height').value,dpi:+$('dpi').value,headW:.255,headTop:.035};await api('/api/preset-manage',{operation:query.get('operation')==='edit'?'edit':'create',id:query.get('id'),preset:p});}

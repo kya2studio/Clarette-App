@@ -122,3 +122,6 @@ body[data-kind="new-batch"] .row{flex-wrap:nowrap}
 .updateUpToDate{text-align:center;padding:10px 0}
 .updateUpToDate .updateIcon{width:64px;height:64px;margin:0 auto 14px}
 .updateUpToDate h1{font-size:17px;margin:0 0 8px}
+.updateProgress{position:relative;width:100%;height:6px;border-radius:4px;overflow:hidden;margin:14px 0;background:#181b23}
+.updateProgress>div{position:absolute;top:0;bottom:0;width:40%;border-radius:4px;background:#b393f4;animation:updateProgressSlide 1.1s ease-in-out infinite}
+@keyframes updateProgressSlide{0%{left:-40%}50%{left:60%}100%{left:100%}}

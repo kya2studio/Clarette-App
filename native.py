@@ -74,7 +74,7 @@ def open_window(app,kind,payload=None):
             try:_windows[kind].destroy()
             except Exception:pass
             _windows.pop(kind,None)
-    sizes={'settings':(900,760),'shortcuts':(760,680),'help':(680,600),'export':(490,490),'preset':(400,330),'rename-batch':(400,118),'new-batch':(460,186),'workspace':(400,220),'updates':(420,230)}
+    sizes={'settings':(900,760),'shortcuts':(760,680),'help':(680,600),'export':(490,490),'preset':(400,330),'rename-batch':(400,118),'new-batch':(460,220),'workspace':(400,220),'updates':(520,260)}
     width,height=sizes.get(kind,(440,320))
     titles={'settings':'Settings','shortcuts':'Keyboard Shortcuts','help':'Documentation & Tutorials','new-batch':'New Batch','rename-batch':'Rename Batch','export':'Export Finals','preset':'Output Preset','workspace':'Workspace','updates':'Check for Updates'}
     # frameless=False (a real, native title bar) is deliberate: see the comment in
