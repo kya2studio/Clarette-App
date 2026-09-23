@@ -451,7 +451,7 @@ def commit_work(f,im,preserve_mask=True):
 def thumbnail(path,stamp):
     im=imaging.load(path);im.thumbnail((80,80));return imaging.png(im)
 
-UNLICENSED_ALLOWED=('/api/activate-license','/api/quit','/api/window','/api/close-window','/api/check-updates','/api/print-profiles','/api/storage')
+UNLICENSED_ALLOWED=('/api/activate-license','/api/quit','/api/window','/api/close-window','/api/check-updates','/api/print-profiles','/api/storage','/api/buy-license')
 def action(path,d):
     if path not in UNLICENSED_ALLOWED:
         import license

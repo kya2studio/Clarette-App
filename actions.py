@@ -61,6 +61,11 @@ def handle(a,path,d):
         import native
         native.toggle_maximize(a)
         return {'ok':True}
+    if path=='/api/buy-license':
+        import webbrowser
+        url=a.S['settings'].get('purchase_url','').strip()
+        if not url:raise ValueError('No purchase link is set yet. Add one in Settings > License.')
+        webbrowser.open(url);return {'ok':True}
     if path=='/api/feedback':
         import platform,urllib.parse,webbrowser
         query=urllib.parse.urlencode({'subject':'Clarette Feedback - v'+a.VERSION,'body':'Clarette '+a.VERSION+' ('+a.BUILD+')\nmacOS '+platform.mac_ver()[0]+'\n\nFeedback:\n'})

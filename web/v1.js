@@ -206,6 +206,7 @@ $('activateLicense').onclick=guarded(async()=>{
  await refresh();message('License activated')
 });
 $('licenseKeyInput').onkeydown=e=>{if(e.key==='Enter')$('activateLicense').click()};
+$('buyLicense').onclick=guarded(()=>api('/api/buy-license'));
 function syncLicense(){
  if(!app)return;
  if(app.licensed?.licensed){if(licenseDialog.open)licenseDialog.close();return}

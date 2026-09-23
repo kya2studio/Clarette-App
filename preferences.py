@@ -30,7 +30,7 @@ def defaults():
                 masking_enabled=True, solid_preview=False, preview_background='#00a84f', checker_brightness=35,
                 cutout_format='PNG', photo_format='JPEG', jpeg_quality=95, tiff_compression='tiff_lzw',
                 embed_profile=True, metadata_mode='preserve', processing_metadata=False, print_profile='',
-                enhancement_prompt='', restore_location='', hypir_location='', osediff_location='', flowsr_location='', seesr_location='', enhancement_provider='classical', toolbar_apps=['photoshop'], toolbar_tools=['chatgpt','gemini','prompt'],
+                enhancement_prompt='', restore_location='', hypir_location='', osediff_location='', flowsr_location='', seesr_location='', enhancement_provider='classical', toolbar_apps=['photoshop'], toolbar_tools=['chatgpt','gemini','prompt'], purchase_url='',
                 openai_model='gpt-image-2.5-sunburst', gemini_model='gemini-3.1-flash-image', seedream_model='dola-seedream-5-0-pro-260628')
 
 def validate_settings(values, previous=None):
