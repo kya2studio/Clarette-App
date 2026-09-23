@@ -106,3 +106,19 @@ body[data-kind="new-batch"] .row{flex-wrap:nowrap}
 .licenseSwap[open]>summary:before{content:'⌄  '}
 .licenseStatusLine{display:flex;align-items:center;gap:7px;color:#7fc4ff;font-size:12px;margin-top:16px}
 .licenseStatusLine svg{flex:none}
+
+/* Check for Updates dialog: modeled on the reference mockup the user
+   provided -- app icon + heading pair, grouped/formatted release notes
+   in a card, and a distinct centered "up to date"/error screen. */
+.updateHead{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px}
+.updateHead h1{margin:0;font-size:18px}
+.updateIcon{width:44px;height:44px;border-radius:10px;flex:none}
+.updateNotes{max-height:280px;overflow:auto}
+.updateNotes h3{margin:0 0 8px;font-size:14px}
+.updateNotes h3:not(:first-child){margin-top:16px}
+.updateNotes ul{margin:0;padding-left:20px}
+.updateNotes li{margin:4px 0;font-size:13px;line-height:1.5}
+.updateNotes p{font-size:13px;margin:6px 0}
+.updateUpToDate{text-align:center;padding:10px 0}
+.updateUpToDate .updateIcon{width:64px;height:64px;margin:0 auto 14px}
+.updateUpToDate h1{font-size:17px;margin:0 0 8px}

@@ -125,15 +125,39 @@ async function settings(){
  }
 }
 function bytes(n){return n>1024**3?(n/1024**3).toFixed(2)+' GB':(n/1024**2).toFixed(1)+' MB'}
+// Lightweight markdown for a GitHub release body: "## Heading" becomes a
+// bold sub-heading, "- item"/"* item" lines become a bullet list under it,
+// anything else is a plain paragraph. Not full markdown -- just enough to
+// turn a release body written with headings/bullets into the grouped,
+// scannable notes the reference mockup shows instead of one truncated blob.
+function renderNotes(text){
+ let html='',inList=false;
+ for(const raw of text.split('\n')){
+  const line=raw.trim();
+  if(!line){if(inList){html+='</ul>';inList=false}continue}
+  if(line.startsWith('## ')){if(inList){html+='</ul>';inList=false}html+=`<h3>${esc(line.slice(3))}</h3>`;continue}
+  if(line.startsWith('- ')||line.startsWith('* ')){if(!inList){html+='<ul>';inList=true}html+=`<li>${esc(line.slice(2))}</li>`;continue}
+  if(inList){html+='</ul>';inList=false}
+  html+=`<p>${esc(line)}</p>`;
+ }
+ if(inList)html+='</ul>';
+ return html;
+}
+const updateIcon='<img src="assets/clarette.svg" class="updateIcon" alt="">';
+function updateHead(title,detail){return `<div class="updateHead">${updateIcon}<div><h1>${esc(title)}</h1><p style="color:#bdb3cf;font-size:12px;margin:2px 0 0">${esc(detail)}</p></div></div>`}
 async function updatesDialog(){
- const header=`<p>Clarette ${esc(state.version)} · Build ${esc(state.build)}</p>`;
- $('content').innerHTML=header+'<p id="updateStatus">Checking for updates…</p>'+`<div class="buttons">${button('cancel','Close')}</div>`;
+ $('content').innerHTML=updateHead('Checking for updates…','Clarette '+state.version+' · Build '+state.build)+`<div class="buttons">${button('cancel','Close')}</div>`;
  $('cancel').onclick=closeDialogWindow;
  let result;
- try{result=await api('/api/check-updates')}catch(e){$('updateStatus').textContent=e.message;return}
- if(result.error){$('updateStatus').textContent=result.error;return}
- if(!result.available){$('updateStatus').textContent=result.message||"You're up to date.";return}
- $('content').innerHTML=header+`<p>Clarette ${esc(result.version)} is available.</p>`+(result.notes?`<p class="hint">${esc(result.notes).slice(0,500)}</p>`:'')+`<div class="buttons">${button('cancel','Not Now')}${button('install','Update Now',true)}</div>`;
+ try{result=await api('/api/check-updates')}catch(e){
+  $('content').innerHTML=`<div class="updateUpToDate">${updateIcon}<h1>Couldn't check for updates</h1><p style="color:#bdb3cf;font-size:13px">${esc(e.message)}</p></div>`+`<div class="buttons">${button('cancel','OK',true)}</div>`;
+  $('cancel').onclick=closeDialogWindow;return;
+ }
+ if(result.error||!result.available){
+  $('content').innerHTML=`<div class="updateUpToDate">${updateIcon}<h1>${result.error?"Couldn't check for updates":"You're up to date!"}</h1><p style="color:#bdb3cf;font-size:13px">${esc(result.error||result.message||('Clarette '+state.version+' is currently the newest version available.'))}</p></div>`+`<div class="buttons">${button('cancel','OK',true)}</div>`;
+  $('cancel').onclick=closeDialogWindow;return;
+ }
+ $('content').innerHTML=updateHead('A new version of Clarette is available!','Clarette '+result.version+' is now available -- you have '+state.version+'. Would you like to download it now?')+(result.notes?`<div class="card updateNotes">${renderNotes(result.notes.slice(0,2000))}</div>`:'')+`<div class="buttons">${button('cancel','Remind Me Later')}${button('install','Install Update',true)}</div>`;
  $('cancel').onclick=closeDialogWindow;
  $('install').onclick=safe(async()=>{
   if(!result.asset_url){status('This release has no downloadable build attached.',true);return}
