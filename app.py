@@ -17,7 +17,7 @@ DATA=support_dir()
 DATA.mkdir(parents=True,exist_ok=True)
 MODELS=Path(os.environ.get('CLARETTE_MODELS',str(DATA/'models'))).expanduser();STATE=DATA/'session.json';TOKEN=secrets.token_urlsafe(32)
 LOCK=threading.RLock();JOBS={};WINDOW=None;SERVER=None;PENDING_UPDATE=None
-from release import VERSION, BUILD
+from release import VERSION, BUILD, PURCHASE_URL
 import preferences, storage, actions
 CACHE=storage.cache_dir(DATA)
 PRESETS=copy.deepcopy(preferences.BUILTINS)
